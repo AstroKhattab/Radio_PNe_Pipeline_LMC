@@ -1,0 +1,47 @@
+# Input data and derived products are not distributed with the code.
+01_Data/
+03_Outputs/
+04_Figures/
+00_Context/
+data/
+outputs/
+figures/
+
+# Large binary science products
+*.fits
+*.fits.gz
+*.fz
+*.hdf5
+*.pkl
+
+# Intermediate VOTables.  Small hand-maintained tables can be force-added
+# with `git add -f`; everything the pipeline writes stays out of the history.
+*.vot
+*.xml.gz
+
+# Never publish these: they carry a local sandbox path and notes on
+# bibliography entries that were never verified.
+make_methodology_review.py
+make_reference_guide.py
+scripts/make_methodology_review.py
+scripts/make_reference_guide.py
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Editors and OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# LaTeX build products
+*.aux
+*.log
+*.out
+*.synctex.gz

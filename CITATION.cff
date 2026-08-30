@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software or the catalogue it produces, please cite it as below."
+title: "lmc-radio-pne: a radio-continuum catalogue and radio PNLF for planetary nebulae in the LMC"
+abstract: >-
+  Analysis pipeline for a radio-continuum catalogue of planetary nebulae in the
+  Large Magellanic Cloud, built from MeerKAT 1.295 GHz and ASKAP-EMU 888 MHz
+  observations, and for the first radio planetary nebula luminosity function
+  measured for an external galaxy.
+type: software
+authors:
+  - family-names: Khattab
+    given-names: Omar K.
+    affiliation: "Western Sydney University"
+  - family-names: Filipovic
+    given-names: Miroslav D.
+    affiliation: "Western Sydney University"
+repository-code: "https://github.com/<account>/lmc-radio-pne"
+license: MIT
+version: "1.0.0"
+date-released: "2026-08-30"
+doi: "10.5281/zenodo.XXXXXXX"   # placeholder: replace with the Zenodo DOI on release
+keywords:
+  - planetary nebulae
+  - Large Magellanic Cloud
+  - radio continuum
+  - MeerKAT
+  - ASKAP
+  - luminosity function
