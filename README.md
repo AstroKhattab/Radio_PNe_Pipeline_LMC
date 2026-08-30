@@ -2,102 +2,136 @@
 
 Analysis pipeline for a radio-continuum catalogue of planetary nebulae in the
 Large Magellanic Cloud, and for the first radio planetary nebula luminosity
-function measured for a galaxy other than our own.
+function (PNLF) measured for a galaxy other than our own.
 
 The parent sample is taken from the HASH PN database (Parker, Bojicic & Frew
-2016), release V/163: every LMC entry classified as a true or probable PN.
-Those positions are cross-matched against the MeerKAT 1.295 GHz LMC mosaic and
-the ASKAP-EMU 888 MHz survey, forced photometry recovers sources the catalogues
-missed, three independent criteria are applied to each detection, and the
-surviving sample is fitted with a selection-aware luminosity function.
+2016), release V/163: every LMC entry classified as a true or probable PN, 707
+objects in all. Those positions are cross-matched against the MeerKAT
+1.295 GHz LMC mosaic and the ASKAP-EMU 888 MHz survey; inspection of the
+MeerKAT image recovers nebulae the source finder missed; three criteria that
+never use the optical classification are applied to each detection; and the
+resulting sample is fitted with ten luminosity-function models.
+
+Every number, table and figure in the accompanying paper is produced by this
+code. Running it from the raw catalogues reproduces the published results in
+full.
+
+## Citing this work
+
+If you use this pipeline, or the catalogue it produces, please cite the paper:
+
+> Khattab, O. K., Filipovic, M. D., et al., *A radio-continuum catalogue and
+> the first radio planetary nebula luminosity function for the Large Magellanic
+> Cloud* (in preparation).
+
+`CITATION.cff` carries the machine-readable form. Please cite the paper rather
+than the repository alone: the paper documents the calibration choices and the
+selection function, and a result quoted without them is difficult to interpret.
 
 ## Pipeline
 
-Run in order; `scripts/run_pipeline.py` enforces it and stops at the first
-failure. Each step writes a table, a small summary in CSV, and a figure.
+Run in order. `scripts/run_pipeline.py` enforces the order and stops at the
+first failure; `--list` prints the steps and `--from <step>` resumes partway.
+Each step writes a table, a short CSV summary, and a figure.
 
-| Step | What it does | Script | Output |
-|---|---|---|---|
-| 1 | Parent sample from HASH V/163 | `step01b_build_parent_hash.py` | `step01b_parent_sample.vot` (707) |
-| 2 | MeerKAT and ASKAP cross-match | `step02c_crossmatch_surveys.py` | `step02c_radio_crossmatch.vot` (707) |
-| 3a | Forced photometry on the misses | `step03d_forced_photometry.py` | `step03d_forced_photometry.vot` (477) |
-| 3b | Vetting those candidates | `step03e_vet_candidates.py` | `step03e_visual_detections.vot` |
-| 4a | One flux scale for everything | `step04a_detection_catalogue.py` | `step04a_radio_detections.vot` (244) |
-| 4b | Criterion 1: thermal spectrum | `step04b_spectral_index.py` | `step04b_spectral_index.vot` |
-| 4c | Criterion 2: MIR/radio ratio | `step04c_mir_radio_ratio.py` | `step04c_mir_radio_ratio.vot` |
-| 4d | Criterion 3: flux ceiling | `step04d_flux_ceiling.py` | `step04d_flux_ceiling.vot` |
-| 4e | The criteria combined | `step04e_classify.py` | `step04e_classified.vot` |
-| 4f | Radio verdict against optical | `step04f_compare_optical.py` | `step04f_contingency.csv` |
-| 5 | Luminosity function, two samples | `step05_pnlf.py` | `step05_pnlf_models.csv` |
+| Step | What it does | Script |
+|---|---|---|
+| 1 | Parent sample from HASH V/163 (707 PNe) | `step1_parent_catalogue.py` |
+| 2a | Cross-match with MeerKAT 1.295 GHz | `step2a_crossmatch_meerkat.py` |
+| 2b | Cross-match with ASKAP-EMU 888 MHz | `step2b_crossmatch_askap.py` |
+| 3a | Inspection queue for the unmatched | `step3a_inspect_meerkat.py` |
+| 3b | Photometry of the visual detections | `step3b_extract_visual.py` |
+| 3b2 | Aperture-corrected visual photometry | `step3b2_reextract_visual.py` |
+| 3c | Detection catalogue and sky maps | `step3c_detection_catalogue.py` |
+| 3d | Multi-survey union | `step3d_multisurvey_union.py` |
+| 4a | Criterion: in-band spectral index | `step4a_spectral_index.py` |
+| 4b | Criterion: mid-infrared to radio ratio | `step4b_mir_radio_ratio.py` |
+| 4c | Criterion: radio flux ceiling | `step4c_flux_ceiling.py` |
+| 5a | Combined evidence grade | `step5a_classify_confidence.py` |
+| 5b | Spectral reliability recut | `step5b_spectral_recut.py` |
+| 5c | Detection and evidence summary | `step5c_detection_and_evidence.py` |
+| 5d | Criteria tally, radio against optical | `step5d_criteria_tally.py` |
+| 6a | PNLF: ten empirical models | `step6a_fit_pnlf_empirical.py` |
+| 6b | PNLF: Ciardullo function | `step6b_fit_pnlf_ciardullo.py` |
+| 6c | PNLF: paper figures | `step6c_pnlf_paper_figures.py` |
+| 6d | PNLF: model grid | `step6d_pnlf_empirical_grid.py` |
+| 6e | PNLF: masking comparison | `step6e_pnlf_mask_vs_clean.py` |
+| 6g | PNLF on the high-confidence sample | `step6a_fit_pnlf_empirical.py --sample high` |
+| 6h | Model grid, high-confidence sample | `step6d_pnlf_empirical_grid.py --sample high` |
+| 7 | **The final catalogue** | `step7_final_catalogue.py` |
 
-`scripts/_support/pnlf_models.py` holds the luminosity-function models and the
-selection-aware likelihood, so that both samples in Step 5 are fitted by
-identical code.
-
-## Results
-
-**Sample.** 707 LMC PNe in HASH V/163 (545 true, 162 probable). A further 138
-LMC entries carry another classification - 105 star clusters, 8 supernova
-remnants, 7 H II regions and 18 others - and are excluded.
-
-**Detections.** 225 have a MeerKAT 1.295 GHz counterpart within 4.5 arcsec and
-82 an ASKAP-EMU counterpart; 77 are seen by both and 5 by ASKAP alone, giving
-230 catalogue detections. Displacing every position by 60 arcsec and repeating
-the match gives 8.8 +/- 3.0 chance coincidences for MeerKAT and 1.2 +/- 1.1 for
-ASKAP, so under 4 per cent of the matches are accidental.
-
-**Forced photometry.** Of the 477 undetected parent PNe, 459 lie inside the
-mosaic. Measuring a flux at all of them and keeping those above 5 sigma in both
-peak and aperture significance yields 25 candidates - against 11 at control
-positions offset by 60 arcsec, so this selection is only about 56 per cent
-pure. Rejecting candidates whose flux is still growing at a 24 arcsec aperture,
-and those within 60 arcsec of a source brighter than 5 mJy/beam, leaves 14
-tentative detections. **244 radio detections in total.**
-
-**Criteria.** Thermal spectral index: 31 pass, 66 fail, 147 not measurable.
-MIR/radio ratio: 92 pass, 34 fail, 118 not measurable. Flux ceiling: 237 pass,
-7 fail. Scored out of what could be measured for each source: 78 confirmed,
-98 probable, 61 possible, 7 rejected.
-
-**Against the optical classification.** Of the 191 detections HASH calls true
-PNe, 76 are confirmed by the radio criteria and 1 is rejected. Of the 53 it
-calls probable, 2 are confirmed and 6 rejected. The radio and optical verdicts
-were derived independently and agree.
-
-**Luminosity function.** Fitted for the full radio sample (235 after masking)
-and for the confirmed sample (77), each masked only at its own 5 sigma
-completeness limit and for the sources above the physical flux ceiling. Seven
-functional forms are compared by AICc, BIC and a probability integral
-transform. The two samples do not choose the same model, which is itself the
-result and is discussed in the paper.
-
-## Running it
-
-```
-pip install -r requirements.txt
-python scripts/run_pipeline.py
-python scripts/run_pipeline.py --from 4b      # restart part way through
+```bash
+python scripts/run_pipeline.py --list        # show the steps
+python scripts/run_pipeline.py               # run all of them
+python scripts/run_pipeline.py --from 6a     # resume from the PNLF fits
 ```
 
-Paths are resolved relative to `~/Desktop/Research/PN LMC Paper`, which must
-hold `01_Data/`, `03_Outputs/` and `04_Figures/`. The raw MeerKAT and ASKAP
-images are not distributed here; they come from the surveys cited in the paper.
+Steps 6a and 6d take `--sample full` (default) or `--sample high`. Both samples
+share one code path, so the two sets of fits differ only in which sources enter
+them, never in how they are fitted or masked.
+
+## The final catalogue
+
+`step7_final_catalogue.py` writes `Final_catalogue.vot` (and a CSV copy): one
+row per radio-detected PN, 254 in all, carrying
+
+| Column | Meaning |
+|---|---|
+| `RP_ID`, `Name`, `hash_id` | identification |
+| `RA`, `Dec` | optical position, degrees J2000 |
+| `reid_class`, `hash_pnstat` | optical classifications |
+| `sep_meerkat_arcsec`, `sep_askap_arcsec` | offset from each survey, separately |
+| `S_meerkat_mJy`, `S_askap_mJy` | integrated flux densities |
+| `alpha`, `alpha_err` | in-band spectral index, reliable fits only |
+| `sp_class` | thermal / uncertain / steep |
+| `mir_radio_ratio` | adopted 8 um to radio flux ratio |
+| `below_flux_ceiling` | True below 2.2 mJy, False above |
+| `radio_class` | classification from the radio criteria alone |
+
+Empty cells are genuine absences — no ASKAP detection, no index that passed the
+quality cuts, no 8 um photometry — and are left blank rather than filled with a
+sentinel so they cannot be mistaken for measurements.
+
+## Method notes
+
+Three points that matter if you intend to reuse any of this:
+
+**The radio classification never sees the optical class.** That is deliberate,
+and it is what allows the radio verdict to be compared against HASH rather than
+merely summarised alongside it. An earlier version of the grade did use the
+optical class as an input; it was replaced for exactly this reason. If you
+modify `step5d_criteria_tally.py`, keep that separation.
+
+**Two masks are applied to the luminosity function, and only two:** bins
+brighter than the physical flux ceiling, and bins fainter than the 5-sigma
+completeness limit. Masked bins are plotted as open symbols rather than
+removed, so the effect of the masking is visible in every figure.
+
+**The mid-infrared criterion uses a Galactic calibration.** In this sample it
+does not behave as intended: thermal-spectrum sources sit above the PN band and
+steep-spectrum sources within it. This is reported rather than tuned away, and
+is discussed at length in the paper. Treat that criterion with care.
+
+`docs/METHOD.md` sets out the numerical choices and their justifications.
+
+## Requirements
+
+Python 3.10 or later, with `numpy`, `scipy`, `astropy` and `matplotlib`
+(`requirements.txt`). No compiled extensions and no external services.
 
 ## Data
 
-| File | Source |
-|---|---|
-| `HASH_V163_full.vot` | HASH PN database, VizieR V/163 |
-| `MeerKAT_3sigma.vot`, `MeerKAT_Final_5sigma.vot` | MeerKAT 1.295 GHz LMC mosaic, Cotton et al. (2026) |
-| `ASKAP_LMC_888MHz_catalogue_full.vot` | ASKAP-EMU, Pennock et al. (2021) |
-| `LMC_I_mosaic_ch0_*.fits` | MeerKAT total intensity, RMS and background maps |
-| `reid2014_photometry.vot` | Reid & Parker (2014) multiwavelength photometry |
-| `Warren_PNE_673.vot` | Reid & Parker optical classifications |
+The input catalogues are not distributed here. The MeerKAT LMC data products
+are available through the SARAO archive, the ASKAP-EMU catalogue through CASDA
+and VizieR, the HASH database at `hashpn.space`, and the Reid & Parker optical
+catalogue from VizieR (J/MNRAS/438/2642). Set `PNBASE` to the project root, or
+accept the default layout, and place the catalogues under `01_Data/`.
 
-## Citing
+## License
 
-See `CITATION.cff`. The paper this supports is in preparation.
+MIT (`LICENSE`). The catalogue and figures the pipeline produces are covered by
+the paper's terms; please cite it.
 
-## Licence
+---
 
-MIT. See `LICENSE`.
+O. K. Khattab and M. D. Filipovic, Western Sydney University.

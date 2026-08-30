@@ -1,7 +1,4 @@
-"""Two-row version of the pipeline schematic used in the paper.
-
-O. K. Khattab & M. D. Filipovic, Western Sydney University.
-"""
+"""step00b_methodology_workflow_horizontal.py — two-row pipeline figure."""
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
@@ -40,25 +37,25 @@ def harrow(x1,x2,y):
 ROW1=48.0; ROW2=7.0
 X=[3.0, 3.0+BW+GAPX, 3.0+2*(BW+GAPX)]
 
-stage(X[0],ROW1,'1.  INPUT DATA',NAVY,[
- ('01a','Unified optical catalogue','Reid & Parker + R14  →  679 PNe'),
- ('','MeerKAT 1.295 GHz mosaic','3σ and 5σ Aegean catalogues'),
- ('','ASKAP–EMU 888 MHz','54,612 sources'),
- ('','Spitzer SAGE 8 μm','605 PNe with photometry')])
+stage(X[0],ROW1,'1.  PARENT CATALOGUE',NAVY,[
+ ('1','HASH V/163, LMC domain','545 true + 162 probable  →  707 PNe'),
+ ('','Reid & Parker cross-match','RP number and optical class  →  605'),
+ ('','Spitzer SAGE 8 μm','265 PNe with photometry'),
+ ('','138 LMC entries set aside','clusters, SNRs, H II regions')])
 harrow(X[0]+BW+0.6, X[1]-0.6, ROW1+BH/2)
 
 stage(X[1],ROW1,'2.  CROSS-MATCH',BLUE,[
- ('02a','Reid × MeerKAT','4.5″ nearest neighbour  →  188'),
- ('02b','Reid × ASKAP','4.5″ accept, wider pairs reviewed  →  61'),
- ('','Independent matching','each survey matched to the parent'),
- ('','Chance coincidences','~10 expected across 679')])
+ ('2a','Parent × MeerKAT 1.295 GHz','4.5″ nearest neighbour  →  225'),
+ ('2b','Parent × ASKAP 888 MHz','4.5″ accept, wider pairs flagged  →  82'),
+ ('','One parent, both surveys','the bookkeeping closes on 707'),
+ ('','Median offset 0.76″','1.6 chance matches expected')])
 harrow(X[1]+BW+0.6, X[2]-0.6, ROW1+BH/2)
 
-stage(X[2],ROW1,'3.  RECOVERY & QA',TEAL,[
- ('03a','Split unmatched sources','23 outside MeerKAT footprint'),
- ('03b','Visual inspection','peak + local RMS  →  32 recovered'),
- ('03c','ASKAP four-panel QA','ASKAP / Hα / [O III] / 8 μm'),
- ('','Recoveries flagged','never define the luminosity function')])
+stage(X[2],ROW1,'3.  INSPECT & QA',TEAL,[
+ ('3a','Split the unmatched','460 inspected, 22 outside the mosaic'),
+ ('3b','Inspect and extract','peak + local RMS  →  24 recovered'),
+ ('3b2','Aperture correction','enclosed-flux factor applied'),
+ ('3e','ASKAP four-panel QA','ASKAP / Hα / [O III] / 8 μm')])
 
 # wrap-around connector from end of row 1 to start of row 2
 yA=ROW1+BH/2; yB=ROW2+BH/2
@@ -72,25 +69,25 @@ ax.add_patch(FancyArrowPatch((1.0,(yA+yB)/2), (1.0, yB),
              arrowstyle='-',lw=2.0,color=GREY,zorder=5))
 ax.add_patch(FancyArrowPatch((1.0,yB),(X[0]-0.6,yB),arrowstyle='-|>',mutation_scale=19,lw=2.0,color=GREY,zorder=5))
 
-stage(X[0],ROW2,'4.  MERGE & STATUS',AMBER,[
- ('04a','MeerKAT catalogue + sky maps','164 MeerKAT-only'),
- ('04b','Multi-survey union','56 both + 5 ASKAP-only  →  225'),
- ('04c','HASH V/163 status check','208 listed (200 T, 8 P)'),
- ('','Status never scored','origin traces to the same optical survey')])
+stage(X[0],ROW2,'4.  THREE CRITERIA',AMBER,[
+ ('4a','Spectral index','128 reliable  →  45 thermal, 88 steep'),
+ ('4b','MIR / radio ratio','888, 997 and 1295 MHz, never rescaled'),
+ ('4c','Radio flux ceiling','2.2 mJy at 49.59 kpc  →  7 above'),
+ ('','No optical input','the criteria stay independent')])
 harrow(X[0]+BW+0.6, X[1]-0.6, ROW2+BH/2)
 
-stage(X[1],ROW2,'5.  DIAGNOSTICS',RED,[
- ('05a','Combined spectral index','MeerKAT sub-bands + ASKAP  →  112'),
- ('06a','MIR/radio ratio','888, 997 and 1295 MHz, never rescaled'),
- ('06b','Evidence-based grading','28 H / 90 P / 97 p / 10 Q'),
- ('','Diagnostics kept separate','combined only at the grading step')])
+stage(X[1],ROW2,'5.  CLASSIFICATION',RED,[
+ ('5e','Scored out of what is measurable','72 High / 104 Possible / 70 Weak'),
+ ('5e','Hard rejections','above the ceiling, or offset > 4.5″  →  8'),
+ ('5e','Tested against HASH and Reid','34% vs 6% reach the highest class'),
+ ('','Optical class never used','which is what makes the test valid')])
 harrow(X[1]+BW+0.6, X[2]-0.6, ROW2+BH/2)
 
 stage(X[2],ROW2,'6.  RADIO PNLF',NAVY,[
- ('07a','Luminosities and binning','220 with a 1.295 GHz flux'),
- ('07b','Ten models ranked by AIC','Ciardullo + empirical forms'),
- ('07c','Sample scenarios S1–S5','M* = −4.16 mag (clean sample)'),
- ('','No luminosity masking','only a sensitivity-based faint cut')])
+ ('6a','Luminosities and binning','242 enter the fit, 13 bins'),
+ ('6a','Ten models ranked by AIC','Ciardullo + empirical forms'),
+ ('6b','Canonical Ciardullo','M* = −4.40 mag, red-χ² = 1.53'),
+ ('','Two masks only','the 5σ limit and the flux ceiling')])
 
 ax.text(3.0,97.0,'Radio planetary-nebula pipeline for the Large Magellanic Cloud',
         fontsize=17.5,fontweight='bold',color=NAVY,ha='left')
@@ -100,5 +97,5 @@ ax.plot([3.0,97.0],[89.6,89.6],lw=1.0,color=EDGE)
 ax.text(97.0,1.5,'github.com/okhattab/lmc-radio-pne',fontsize=9.6,color=GREY,ha='right',style='italic')
 
 fig.tight_layout(pad=0.3)
-out=os.environ.get("PNBASE",".")+"/04_Figures/step00b_methodology_workflow_2row.pdf"
+out=os.environ.get("PNBASE",".")+"/05_Figures/step00b_methodology_workflow_2row.pdf"
 fig.savefig(out); print("wrote",out)
