@@ -19,9 +19,6 @@ figures/
 *.vot
 *.xml.gz
 
-# Local working notes, not part of the public pipeline.
-.CLAUDE.md
-
 # Never publish these: they carry a local sandbox path and notes on
 # bibliography entries that were never verified.
 make_methodology_review.py
