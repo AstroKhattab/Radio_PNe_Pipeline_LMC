@@ -39,13 +39,13 @@ Inputs
 Outputs
 -------
     03_Outputs/Final_catalogue.vot     the catalogue
-    03_Outputs/Final_catalogue.csv     the same, for readers without VOTable
     03_Outputs/Final_catalogue_excerpt.tex  sampled rows, for the paper
 
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
 import os
+import sys
 import warnings
 
 import numpy as np
@@ -53,15 +53,16 @@ from astropy.table import Table, Column
 
 warnings.filterwarnings("ignore")
 
-BASE = os.environ.get("PNBASE", os.path.expanduser("~/Desktop/Research/PN LMC Paper"))
-OUTS = os.path.join(BASE, "03_Outputs")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-IN_FILE = os.path.join(OUTS, "step5d_criteria_tally.vot")
-OUT_VOT = os.path.join(OUTS, "Final_catalogue.vot")
-OUT_CSV = os.path.join(OUTS, "Final_catalogue.csv")
-OUT_TEX = os.path.join(OUTS, "Final_catalogue_excerpt.tex")
+cfg = config.load()
 
-N_EXCERPT = 12
+IN_FILE = cfg.out("step5d_criteria_tally.vot")
+OUT_VOT = cfg.out("Final_catalogue.vot")
+OUT_TEX = cfg.table("Final_catalogue_excerpt.tex")
+
+N_EXCERPT = 12   # rows in the published excerpt, sampled evenly in RA
 
 print("=" * 62)
 print("  Step 7  -  final radio catalogue")
@@ -157,7 +158,6 @@ out["radio_class"] = Column(radio_class,
 out = out[np.argsort(np.array(out["RA"], dtype=float))]
 
 out.write(OUT_VOT, format="votable", overwrite=True)
-out.write(OUT_CSV, format="csv", overwrite=True)
 
 # =================================================================== report
 print(f"\ncolumns: {len(out.colnames)}   rows: {len(out)}")
@@ -217,6 +217,5 @@ with open(OUT_TEX, "w") as fh:
     fh.write("\\bottomrule\n\\end{tabular}\n")
 
 print(f"\n  -> {OUT_VOT}")
-print(f"  -> {OUT_CSV}")
 print(f"  -> {OUT_TEX}  ({N_EXCERPT} rows sampled through the table)")
 print("\nstep7 complete")

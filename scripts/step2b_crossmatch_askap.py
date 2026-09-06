@@ -28,6 +28,7 @@ O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
 import os
+import sys
 import warnings
 
 import astropy.units as u
@@ -35,37 +36,35 @@ import matplotlib
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.table import Column, Table
+from astropy.utils.exceptions import AstropyWarning
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.offsetbox import AnchoredText
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+from _support.plot_style import apply_paper_style
+
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-BASE = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA = os.path.join(BASE, "01_Data")
-OUTS = os.path.join(BASE, "03_Outputs")
-FIGS = os.path.join(BASE, "05_Figures")
+cfg = config.load()
+ASKAP_FILE = cfg.data("askap_catalogue")
+REID_FILE = cfg.out("step1_parent_catalogue.vot")
+OUT_MATCHED = cfg.out("step2b_askap_matched.vot")
+OUT_UNMATCHED = cfg.out("step2b_askap_unmatched.vot")
+OUT_REVIEW = cfg.out("step2b_askap_review.vot")
+OUT_STATS = cfg.out("step2b_askap_match_stats.csv")
+FIG_OFFSETS = cfg.fig("step2b_askap_offsets.pdf")
 
-ASKAP_FILE = os.path.join(DATA, "ASKAP_LMC_888MHz_catalogue_full.vot")
-REID_FILE = os.path.join(OUTS, "step1_parent_catalogue.vot")
-OUT_MATCHED = os.path.join(OUTS, "step2b_askap_matched.vot")
-OUT_UNMATCHED = os.path.join(OUTS, "step2b_askap_unmatched.vot")
-OUT_REVIEW = os.path.join(OUTS, "step2b_askap_review.vot")
-FIG_OFFSETS = os.path.join(FIGS, "step2b_askap_offsets.pdf")
-
-ACCEPT_RAD = 4.5
-REVIEW_RAD = 6.0
-OUTER_RAD = 10.0
-ASKAP_FREQ_MHZ = 888.0
-ASKAP_CAL_FRAC = 0.08
-ASKAP_AREA_DEG2 = 120.0
-
-os.makedirs(OUTS, exist_ok=True)
-os.makedirs(FIGS, exist_ok=True)
+ACCEPT_RAD = cfg["crossmatch"]["accept_arcsec"]
+REVIEW_RAD = cfg["crossmatch"]["askap_review_arcsec"]
+OUTER_RAD = cfg["crossmatch"]["askap_outer_arcsec"]
+ASKAP_FREQ_MHZ = cfg["askap"]["frequency_mhz"]
+ASKAP_CAL_FRAC = cfg["askap"]["calibration_fraction"]
+ASKAP_AREA_DEG2 = cfg["crossmatch"]["askap_area_deg2"]
 
 print("step2b: cross-matching the parent catalogue against ASKAP-EMU 888 MHz")
 
@@ -115,11 +114,15 @@ print(f"    Accepted       (<= {ACCEPT_RAD:.1f}\") : {accepted.sum()}")
 print(f"    Borderline ({ACCEPT_RAD:.1f}-{REVIEW_RAD:.1f}\") : {borderline.sum()}")
 print(f"    Wide review ({REVIEW_RAD:.1f}-{OUTER_RAD:.1f}\") : {wide_review.sum()}")
 
-# Approximate background expectation for a uniformly distributed catalogue.
+# The accepted matches must be one-to-one; nearest neighbour alone does not
+# guarantee it, and a shared counterpart would double-count a detection.
+used = nearest_full[accepted]
+assert len(set(used)) == len(used), "one ASKAP source matched to two PNe"
+
+# Chance coincidences expected if the radio sources were distributed at random.
 surface_density = len(askap) / ASKAP_AREA_DEG2
-chance_per_reid = np.pi * (ACCEPT_RAD / 3600.0) ** 2 * surface_density
-print(f"    Uniform-background expectation at {ACCEPT_RAD:.1f}\": "
-      f"{chance_per_reid * len(reid):.2f} matches")
+chance = np.pi * (ACCEPT_RAD / 3600.0) ** 2 * surface_density * len(reid)
+print(f"    Expected by chance at {ACCEPT_RAD:.1f}\": {chance:.2f} over the parent sample")
 
 def values_for_matches(column_name, fill=np.nan, dtype=float):
     out = np.full(len(reid), fill, dtype=dtype)
@@ -269,4 +272,19 @@ plt.savefig(FIG_OFFSETS, format="pdf", bbox_inches="tight", facecolor="white")
 plt.close()
 print(f"    Figure: {FIG_OFFSETS}")
 
+stats = Table()
+stats["quantity"] = ["n_parent", "n_accepted", "n_borderline_4p5_to_6",
+                     "n_wide_review_6_to_10", "median_offset_arcsec",
+                     "mean_dra_cosdec_arcsec", "mean_ddec_arcsec",
+                     "std_dra_cosdec_arcsec", "std_ddec_arcsec",
+                     "expected_chance_matches"]
+stats["value"] = [len(reid), int(accepted.sum()), int(borderline.sum()),
+                  int(wide_review.sum()), float(np.nanmedian(sep_full[accepted])),
+                  float(np.mean(x)), float(np.mean(y)),
+                  float(np.std(x)), float(np.std(y)), float(chance)]
+stats.write(OUT_STATS, format="ascii.csv", overwrite=True)
+print(f"    {os.path.basename(OUT_STATS)}")
+
 print("\nstep2b complete")
+print(f"  Accepted      : {int(accepted.sum())}")
+print(f"  Median offset : {np.nanmedian(sep_full[accepted]):.2f} arcsec")

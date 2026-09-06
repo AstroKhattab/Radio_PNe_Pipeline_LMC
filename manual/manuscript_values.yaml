@@ -1,0 +1,110 @@
+# The values as they stand in the manuscript (main_text_v3.tex, revision of
+# 2026-08-31).  Nothing here is used by the analysis.  make_summary.py reads
+# this file only so that it can put the pipeline's number and the paper's
+# number side by side and mark the ones that disagree.
+#
+# Update this file when the manuscript is updated, not when a result changes.
+
+source: "main_text_v3.tex, revision 2026-08-31"
+
+values:
+  # Section 4.1, the parent sample
+  parent_total: 707
+  parent_true: 545
+  parent_probable: 162
+  parent_with_rp: 605
+  parent_with_8um: 265
+  parent_set_aside: 138
+
+  # Section 4.2, radio counterparts
+  meerkat_matched: 225
+  askap_matched: 82
+  askap_review_4p5_to_6: 3
+  askap_review_6_to_10: 2
+  median_offset_arcsec: 0.76
+  mean_dra_meerkat: -0.14
+  mean_dra_askap: -0.82
+  chance_matches_askap: 1.6
+
+  # Section 4.3, sub-threshold detections
+  inspected_inside_mosaic: 460
+  outside_mosaic: 22
+  visual_recovered: 24
+  visual_median_flux_mjy: 0.020
+  visual_median_peak_snr: 4.1
+  meerkat_total: 249
+  both_surveys: 77
+  meerkat_only: 172
+  askap_only: 5
+  radio_union: 254
+  neither: 453
+
+  # Section 4.4, spectral indices
+  reliable_indices: 128
+  n_thermal: 45
+  n_uncertain: 35
+  n_steep: 88
+  n_no_reliable: 86
+
+  # Section 6.2, the field comparison
+  alpha_offset_below_0p3: 0.11
+  alpha_offset_0p3_0p6: 0.45
+  alpha_offset_0p6_1p0: 0.81
+  alpha_offset_above_1p0: 0.95
+
+  # Section 4.5, the MIR to radio ratio
+  mir_with_ratio: 152
+  mir_median_all: 6.1
+  mir_median_thermal: 23.3
+  mir_median_steep: 2.7
+  mir_reliable_index_and_ratio: 57
+
+  # Section 4.6, the flux ceiling
+  ceiling_below: 242
+  ceiling_above: 7
+  ceiling_not_measurable: 5
+
+  # Section 4.7, the criteria score
+  crit_4a_pass: 45
+  crit_4a_fail: 88
+  crit_4a_na: 121
+  crit_4b_pass: 93
+  crit_4b_fail: 40
+  crit_4b_na: 121
+  crit_4c_pass: 242
+  crit_4c_fail: 7
+  crit_4c_na: 5
+  radio_high: 71
+  radio_possible: 105
+  radio_weak: 70
+  radio_rejected: 8
+
+  # Section 4.8, radio against optical
+  hash_true_total: 202
+  hash_true_high: 67
+  hash_true_rejected: 2
+  hash_probable_total: 52
+  hash_probable_high: 4
+  hash_probable_rejected: 6
+  rate_true_percent: 33
+  rate_probable_percent: 8
+  promoted: 4
+
+  # Section 4.10, the luminosity function
+  pnlf_fitted_sources: 242
+  pnlf_bins: 13
+  pnlf_m_star: -4.40
+  pnlf_log_lstar: 21.76
+  pnlf_redchi: 1.53
+  pnlf_r2: 0.64
+  pnlf_ciardullo_rank: 4
+  pnlf_ciardullo_delta_aic: 2.32
+  pnlf_redchi_ceiling_off: 4.27
+
+  # Section 4.11, the high-confidence sample
+  high_sample_size: 71
+  high_bins: 12
+  high_m_star: -4.39
+  high_redchi: 1.26
+  high_ciardullo_rank: 3
+  high_ciardullo_delta_aic: 1.54

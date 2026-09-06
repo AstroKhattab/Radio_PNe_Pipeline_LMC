@@ -1,11 +1,12 @@
-# Input data and derived products are not distributed with the code.
-01_Data/
-03_Outputs/
-04_Figures/
-00_Context/
+# Input data and derived tables are not distributed with the code.  The
+# figures, the LaTeX tables and the summary are, because they are the result.
 data/
+01_Data/
 outputs/
-figures/
+03_Outputs/
+04_Inspect/
+05_Figures/
+00_Context/
 
 # Large binary science products
 *.fits
@@ -14,17 +15,20 @@ figures/
 *.hdf5
 *.pkl
 
-# Intermediate VOTables.  Small hand-maintained tables can be force-added
-# with `git add -f`; everything the pipeline writes stays out of the history.
+# Intermediate tables the pipeline writes
 *.vot
 *.xml.gz
+data_checksums.sha256
 
-# Never publish these: they carry a local sandbox path and notes on
-# bibliography entries that were never verified.
-make_methodology_review.py
-make_reference_guide.py
-scripts/make_methodology_review.py
-scripts/make_reference_guide.py
+# ...but keep the machine-written LaTeX tables, the figures and the summary.
+!figures/
+!figures/**
+!tables/
+!tables/**
+!results/
+!results/**
+!manual/
+!manual/**
 
 # Python
 __pycache__/

@@ -1,29 +1,26 @@
 """
 step3a_inspect_meerkat.py
 =========================
-Step 3a — Split and inspect unmatched Reid x MeerKAT sources.
+Step 3a — Split and inspect the parent PNe that MeerKAT did not cross-match.
 
-Logic
------
-    679 total Reid sources
-    - 188 cross-matched in Step 02a → step2a_meerkat_matched.vot  (DONE)
-    - 491 unmatched
-        - 23 outside MeerKAT region → step3a_meerkat_outside.vot
-        - 468 inside region, not detected → step3a_meerkat_to_check.vot + inspection PDF
-              Omar checks these manually, provides IDs of visual detections.
+The unmatched sources are split into those that fall inside the mosaic and
+those that fall outside it, and a radio / Halpha / [O III] cutout page is
+written for each of the former.  Those pages are what the visual detection
+list in manual/visual_detections.txt is read off; nothing here decides
+anything by itself.
 
 Outputs
 -------
-    03_Outputs/step3a_meerkat_outside.vot — 23 sources outside MeerKAT region
-    03_Outputs/step3a_meerkat_to_check.vot — 468 sources inside region to inspect
-    04_Inspect/figures/step3a_meerkat_matched_cutouts.pdf — 188 pages
-    04_Inspect/figures/step3a_meerkat_to_check_cutouts.pdf — 468 pages
+    03_Outputs/step3a_meerkat_outside.vot   parent PNe outside the mosaic
+    03_Outputs/step3a_meerkat_to_check.vot  inside the mosaic, to inspect
+    04_Inspect/figures/step3a_meerkat_matched_cutouts.pdf
+    04_Inspect/figures/step3a_meerkat_to_check_cutouts.pdf
 
 Authors : Omar K. Khattab, M. D. Filipovic
 Group   : Filipovic Group, Western Sydney University
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -37,19 +34,25 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.nddata import Cutout2D
 import astropy.units as u
+from astropy.utils.exceptions import AstropyWarning
 from datetime import datetime
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-BASE  = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA  = os.path.join(BASE, "01_Data")
-OUTS  = os.path.join(BASE, "03_Outputs")
-INSP  = os.path.join(BASE, "04_Inspect", "figures")
+warnings.simplefilter("ignore", AstropyWarning)
+
+cfg = config.load()
+OUTS  = cfg.out()
+# The cutout pages take far longer than everything else in the pipeline put
+# together and are quality control, not a paper figure.  --no-cutouts writes
+# the tables and skips them.
+MAKE_CUTOUTS = "--no-cutouts" not in sys.argv
+INSP  = cfg.inspect("figures")
 os.makedirs(INSP, exist_ok=True)
 
-MKT3_FILE  = os.path.join(DATA, "MeerKAT_3sigma.vot")
-HULL_STEP  = 50
+MKT3_FILE  = cfg.data("meerkat_3sigma")
+HULL_STEP  = 50   # sample every 50th source when tracing the mosaic outline
 
 # ── Image config (matching your PNE_Cutout_Script_flexible.py style) ──────────
 CUTOUT_SIZE       = 60      # arcsec
@@ -60,11 +63,11 @@ DPI               = 100
 PANEL_SIZE        = 5       # inches per panel
 
 IMAGES = [
-    {"name": "Radio",   "file": os.path.join(DATA, "LMC_I_mosaic_ch0_beam.fits"),
+    {"name": "Radio",   "file": cfg.data("meerkat_mosaic"),
      "is_radio": True,  "colormap": "magma", "enabled": True},
-    {"name": "H-alpha", "file": os.path.join(DATA, "LMC.ha.fits"),
+    {"name": "H-alpha", "file": cfg.data("mcels_ha"),
      "is_radio": False, "colormap": "magma", "enabled": True},
-    {"name": "[O III]", "file": os.path.join(DATA, "LMC.oiii.fits"),
+    {"name": "[O III]", "file": cfg.data("mcels_oiii"),
      "is_radio": False, "colormap": "magma", "enabled": True},
 ]
 
@@ -104,6 +107,8 @@ outside  = ~inside & valid
 
 n_outside  = int(outside.sum())
 n_to_check = int(inside.sum())
+assert n_outside + n_to_check == len(unmatched), \
+    "unmatched sources lost between inside and outside the mosaic"
 print(f"    Inside  (to check): {n_to_check}")
 print(f"    Outside (skip)    : {n_outside}")
 
@@ -119,6 +124,10 @@ tbl_outside.write(os.path.join(OUTS, "step3a_meerkat_outside.vot"), format="vota
 tbl_to_check.write(os.path.join(OUTS, "step3a_meerkat_to_check.vot"), format="votable", overwrite=True)
 print(f"    step3a_meerkat_outside.vot -> {n_outside} rows (excluded — outside region)")
 print(f"    step3a_meerkat_to_check.vot -> {n_to_check} rows  (inspect manually)")
+
+if not MAKE_CUTOUTS:
+    print("\n[4] --no-cutouts: tables written, inspection pages skipped")
+    raise SystemExit(0)
 
 # ── Load FITS images once ──────────────────────────────────────────────────────
 print("\n[4] Loading FITS images...")
@@ -299,7 +308,7 @@ write_pdf(
 print(f"\n{'='*60}")
 print(f"  STEP 3 COMPLETE")
 print(f"{'='*60}")
-print(f"  Total Reid PNe          : 679")
+print(f"  Unmatched at step 2a    : {len(unmatched)}")
 print(f"  Cross-matched (radio)   : {len(matched)}")
 print(f"  Outside MeerKAT region  : {n_outside}  (skipped)")
 print(f"  To inspect manually     : {n_to_check}")
@@ -309,6 +318,6 @@ print(f"    step3a_meerkat_to_check.vot ({n_to_check} sources)")
 print(f"\n  Inspection PDFs (04_Inspect/figures/):")
 print(f"    step3a_meerkat_matched_cutouts.pdf ({len(matched)} pages)")
 print(f"    step3a_meerkat_to_check_cutouts.pdf ({n_to_check} pages)")
-print(f"\n  Once you identify visual detections, provide their RP_IDs")
-print(f"  and run step3b_extract_meerkat_visual.py to add them to the main catalogue.")
+print(f"\n  Read the visual detections off the to-check pages, list them in")
+print(f"  manual/visual_detections.txt, then run step3b.")
 print(f"{'='*60}")

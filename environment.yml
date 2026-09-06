@@ -1,0 +1,11 @@
+# conda create -f environment.yml && conda activate lmc-radio-pne
+name: lmc-radio-pne
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy=1.24.3
+  - scipy=1.10.1
+  - astropy=5.2.2
+  - matplotlib=3.7.2
+  - pyyaml=6.0.3

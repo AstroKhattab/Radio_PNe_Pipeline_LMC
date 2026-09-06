@@ -17,77 +17,60 @@ Inputs
 
 Outputs
 -------
-    03_Outputs/step3d_multisurvey_master.vot  -- all 679 Reid rows
-    03_Outputs/step3d_multisurvey_detected_union.vot -- MeerKAT OR ASKAP
-    03_Outputs/step3d_multisurvey_nondetected.vot -- neither survey
+    03_Outputs/step3d_multisurvey_master.vot          one row per parent PN
+    03_Outputs/step3d_multisurvey_detected_union.vot  MeerKAT or ASKAP
+    03_Outputs/step3d_multisurvey_nondetected.vot     neither survey
+    03_Outputs/step3d_detection_summary.csv           the bookkeeping
     05_Figures/step3d_multisurvey_summary.pdf
 
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
 import os
+import sys
 import warnings
 
 import matplotlib
 import numpy as np
 from astropy.table import Column, Table
+from astropy.utils.exceptions import AstropyWarning
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 from _support.plot_style import apply_paper_style
 
-warnings.filterwarnings("ignore")
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-BASE = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA = os.path.join(BASE, "01_Data")
-OUTS = os.path.join(BASE, "03_Outputs")
-FIGS = os.path.join(BASE, "05_Figures")
+cfg = config.load()
+REID_FILE = cfg.out("step1_parent_catalogue.vot")
+MKT_MATCHED_FILE = cfg.out("step2a_meerkat_matched.vot")
+MKT_VISUAL_FILE = cfg.out("step3b_meerkat_visual.vot")
+MKT_DETECTED_FILE = cfg.out("step3c_meerkat_detected.vot")
+ASKAP_MATCHED_FILE = cfg.out("step2b_askap_matched.vot")
+OUT_MASTER = cfg.out("step3d_multisurvey_master.vot")
+OUT_DETECTED = cfg.out("step3d_multisurvey_detected_union.vot")
+OUT_NONDETECTED = cfg.out("step3d_multisurvey_nondetected.vot")
+OUT_SUMMARY = cfg.out("step3d_detection_summary.csv")
+OUT_FIG = cfg.fig("step3d_multisurvey_summary.pdf")
 
-REID_FILE = os.path.join(OUTS, "step1_parent_catalogue.vot")
-MKT_MATCHED_FILE = os.path.join(OUTS, "step2a_meerkat_matched.vot")
-MKT_VISUAL_FILE = os.path.join(OUTS, "step3b_meerkat_visual.vot")
-# ADDED 2026-08-30: corrected aperture photometry for the 32 visual recoveries.
-# step03b summed a 4-arcsec-radius aperture but divided by the full 8-arcsec-FWHM
-# Gaussian beam area; a Gaussian encloses only 50 per cent of its flux inside
-# r = FWHM/2, so its integrated fluxes are low by a factor of two.
-MKT_VISUAL2_FILE = os.path.join(OUTS, "step3b2_meerkat_visual_reextracted.vot")
-MKT_DETECTED_FILE = os.path.join(OUTS, "step3c_meerkat_detected.vot")
-ASKAP_MATCHED_FILE = os.path.join(OUTS, "step2b_askap_matched.vot")
-OUT_MASTER = os.path.join(OUTS, "step3d_multisurvey_master.vot")
-OUT_DETECTED = os.path.join(OUTS, "step3d_multisurvey_detected_union.vot")
-OUT_NONDETECTED = os.path.join(OUTS, "step3d_multisurvey_nondetected.vot")
-OUT_FIG = os.path.join(FIGS, "step3d_multisurvey_summary.pdf")
-
-os.makedirs(OUTS, exist_ok=True)
-os.makedirs(FIGS, exist_ok=True)
+CONFUSED_RP_IDS = tuple(cfg["visual"]["confused_ids"])
 
 print("step3d: building the multi-survey master catalogue")
 
 reid = Table.read(REID_FILE, format="votable")
 mkt_matched = Table.read(MKT_MATCHED_FILE, format="votable")
-mkt_visual = Table.read(MKT_VISUAL_FILE, format="votable") if os.path.exists(MKT_VISUAL_FILE) else None
-# ADDED 2026-08-30: optional; if the file is absent the old step03b fluxes are used.
-# The aperture correction is not optional.  step3b sums inside a 4 arcsec
-# radius but divides by the area of the full 8 arcsec beam, which understates
-# every visual flux by a factor of two; step3b2 re-extracts with the correct
-# enclosed-flux factor.  If that file is missing the old code fell back to the
-# uncorrected value without saying so, which is how a factor of two can travel
-# all the way to the luminosity function unnoticed.  Fail instead.
-if not os.path.exists(MKT_VISUAL2_FILE):
-    raise SystemExit(
-        f"missing {os.path.basename(MKT_VISUAL2_FILE)} - run step3b2 first.\n"
-        "Without it the visual integrated fluxes are a factor of two too low.")
-mkt_visual2 = Table.read(MKT_VISUAL2_FILE, format="votable")
+mkt_visual = Table.read(MKT_VISUAL_FILE, format="votable")
 mkt_detected = Table.read(MKT_DETECTED_FILE, format="votable")
 askap_matched = Table.read(ASKAP_MATCHED_FILE, format="votable")
 
 print("\n[1] Loaded catalogues")
 print(f"    Reid master       : {len(reid)}")
 print(f"    MeerKAT catalogue : {len(mkt_matched)}")
-print(f"    MeerKAT visual    : {len(mkt_visual) if mkt_visual is not None else 0}")
-# ADDED 2026-08-30
-print(f"    MeerKAT visual v2 : {len(mkt_visual2) if mkt_visual2 is not None else 0}")
+print(f"    MeerKAT visual    : {len(mkt_visual)}")
 print(f"    MeerKAT union     : {len(mkt_detected)}")
 print(f"    ASKAP accepted    : {len(askap_matched)}")
 
@@ -103,17 +86,13 @@ def key_map(table):
 reid_keys = [row_key(reid, i) for i in range(len(reid))]
 mkt_det_map = key_map(mkt_detected)
 mkt_match_map = key_map(mkt_matched)
-mkt_visual_map = key_map(mkt_visual) if mkt_visual is not None else {}
-# ADDED 2026-08-30: the step03b2 re-extraction is matched on RP_ID, not on position.
-mkt_visual2_map = ({str(mkt_visual2["RP_ID"][i]).strip(): i for i in range(len(mkt_visual2))}
-                   if mkt_visual2 is not None else {})
-# ADDED 2026-08-30: aperture photometry confused by a neighbour or by extended
-# emission inside the aperture.  Flag only - no classification or grade changes.
+mkt_visual_map = key_map(mkt_visual)
+# Aperture photometry confused by a neighbour or by extended emission inside
+# the aperture.  Flagged only; no classification or grade changes.
 #   RP1114 : growth curve rises monotonically (1.09, 3.75, 7.92, 9.22 mJy at
 #            r = 4, 8, 16, 24 arcsec); sits on an extended ridge with a second
 #            component inside the aperture.
 #   RP980  : sits on diffuse emission, annulus background 46 per cent of its peak.
-CONFUSED_RP_IDS = ("RP1114", "RP980")
 askap_map = key_map(askap_matched)
 
 n = len(reid)
@@ -148,8 +127,6 @@ def blank_text(width=20):
 mkt_method = blank_text(20)
 mkt_ra = blank_float(); mkt_dec = blank_float(); mkt_sep = blank_float()
 mkt_peak = blank_float(); mkt_int = blank_float(); mkt_err_int = blank_float()
-# REPLACED 2026-08-30: widened to hold "aperture_corrected_step03b2" (27 chars).
-# mkt_rms = blank_float(); mkt_snr = blank_float(); mkt_err_method = blank_text(24)
 mkt_rms = blank_float(); mkt_snr = blank_float(); mkt_err_method = blank_text(32)
 
 for i, key in enumerate(reid_keys):
@@ -172,32 +149,16 @@ for i, key in enumerate(reid_keys):
         mkt_dec[i] = float(mkt_visual["mkt_dec"][j])
         mkt_sep[i] = float(mkt_visual["offset_arcsec"][j])
         mkt_peak[i] = float(mkt_visual["mkt_peak_flux_mJy"][j]) / 1000.0
-        # REPLACED 2026-08-30: the integrated flux now comes from step03b2, which
-        # applies the correct 0.5 enclosed-flux factor to the same 4-arcsec aperture.
-        # The 16-arcsec step03b2 aperture is deliberately NOT adopted: at 2-6 sigma
-        # it is noise dominated (20 of 32 below 2 sigma, five negative).
-        # mkt_int[i] = float(mkt_visual["mkt_int_flux_mJy"][j]) / 1000.0
         mkt_rms[i] = float(mkt_visual["mkt_local_rms_mJy"][j]) / 1000.0
         mkt_snr[i] = float(mkt_visual["mkt_snr"][j])
-        # The visual script does not fit an integrated-flux uncertainty.
-        # Preserve a transparent local-rms proxy instead of inventing a fit error.
-        # REPLACED 2026-08-30: step03b2 does supply one, so carry the real
-        # uncertainty where it exists and keep the proxy only as a fallback.
-        # mkt_err_int[i] = mkt_rms[i]
-        # mkt_err_method[i] = "local_rms_proxy"
-        j2 = mkt_visual2_map.get(str(mkt_visual["RP_ID"][j]).strip(), -1)
-        int_corrected = (float(mkt_visual2["mkt_int_flux_mJy_old_corrected"][j2])
-                         if j2 >= 0 else np.nan)
-        if j2 >= 0 and np.isfinite(int_corrected):
-            mkt_int[i] = int_corrected / 1000.0
-            err_mjy = float(mkt_visual2["mkt_err_int_flux_mJy_new"][j2])
-            if np.isfinite(err_mjy) and err_mjy > 0.0:
-                mkt_err_int[i] = err_mjy / 1000.0
-            else:
-                mkt_err_int[i] = mkt_rms[i]
-            mkt_err_method[i] = "aperture_corrected_step03b2"
+        # Step 3b already divides its aperture sum by the fraction of a point
+        # source that aperture encloses, so this is the corrected flux.
+        mkt_int[i] = float(mkt_visual["mkt_int_flux_mJy"][j]) / 1000.0
+        err_mjy = float(mkt_visual["mkt_err_int_flux_mJy"][j])
+        if np.isfinite(err_mjy) and err_mjy > 0.0:
+            mkt_err_int[i] = err_mjy / 1000.0
+            mkt_err_method[i] = "aperture_noise_and_flux_scale"
         else:
-            mkt_int[i] = float(mkt_visual["mkt_int_flux_mJy"][j]) / 1000.0
             mkt_err_int[i] = mkt_rms[i]
             mkt_err_method[i] = "local_rms_proxy"
 
@@ -255,6 +216,16 @@ n_both = int(np.sum(det_meerkat & det_askap))
 n_mkt_only = int(np.sum(det_meerkat & ~det_askap))
 n_ask_only = int(np.sum(~det_meerkat & det_askap))
 
+assert n_both + n_mkt_only + n_ask_only + int((~det_union).sum()) == n, \
+    "the four detection categories do not sum to the parent sample"
+
+summary = Table()
+summary["category"] = ["parent", "meerkat_and_askap", "meerkat_only",
+                       "askap_only", "radio_union", "neither"]
+summary["N"] = [n, n_both, n_mkt_only, n_ask_only, int(det_union.sum()),
+                int((~det_union).sum())]
+summary.write(OUT_SUMMARY, format="ascii.csv", overwrite=True)
+
 print("\n[2] Multisurvey union")
 print(f"    Both surveys : {n_both}")
 print(f"    MeerKAT only : {n_mkt_only}")
@@ -281,5 +252,6 @@ print("\n[3] Outputs")
 print(f"    {OUT_MASTER}")
 print(f"    {OUT_DETECTED}")
 print(f"    {OUT_NONDETECTED}")
+print(f"    {OUT_SUMMARY}")
 print(f"    {OUT_FIG}")
 print("\nstep 3d complete")

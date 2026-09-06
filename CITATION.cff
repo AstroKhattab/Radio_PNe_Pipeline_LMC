@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "If you use this software or the catalogue it produces, please cite it as below."
-title: "lmc-radio-pne: a radio-continuum catalogue and radio PNLF for planetary nebulae in the LMC"
+message: "If you use this software or the catalogue it produces, please cite the paper below."
+title: "Radio_PNe_Pipeline_LMC: a radio-continuum catalogue and radio PNLF for planetary nebulae in the LMC"
 abstract: >-
   Analysis pipeline for a radio-continuum catalogue of planetary nebulae in the
   Large Magellanic Cloud, built from MeerKAT 1.295 GHz and ASKAP-EMU 888 MHz
@@ -14,11 +14,16 @@ authors:
   - family-names: Filipovic
     given-names: Miroslav D.
     affiliation: "Western Sydney University"
-repository-code: "https://github.com/<account>/lmc-radio-pne"
+  - family-names: Smeaton
+    given-names: Zachary J.
+    affiliation: "Western Sydney University"
+  - family-names: Crawford
+    given-names: Evan J.
+    affiliation: "Western Sydney University"
+repository-code: "https://github.com/AstroKhattab/Radio_PNe_Pipeline_LMC"
 license: MIT
 version: "1.0.0"
-date-released: "2026-08-30"
-doi: "10.5281/zenodo.XXXXXXX"   # placeholder: replace with the Zenodo DOI on release
+date-released: "2026-09-07"
 keywords:
   - planetary nebulae
   - Large Magellanic Cloud
@@ -26,3 +31,16 @@ keywords:
   - MeerKAT
   - ASKAP
   - luminosity function
+preferred-citation:
+  type: article
+  title: "A Radio-Continuum Catalogue of Planetary Nebulae in the Large Magellanic Cloud and the First Radio Planetary Nebula Luminosity Function"
+  authors:
+    - family-names: Khattab
+      given-names: Omar K.
+    - family-names: Filipovic
+      given-names: Miroslav D.
+    - family-names: Smeaton
+      given-names: Zachary J.
+    - family-names: Crawford
+      given-names: Evan J.
+  year: 2026

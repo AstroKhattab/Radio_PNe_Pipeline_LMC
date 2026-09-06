@@ -1,202 +1,197 @@
 # Method
 
-Last updated: 30 August 2026.
+Why the analysis is done the way it is. **No counts appear in this file.** The
+numbers this pipeline produces are in [`results/summary.md`](../results/summary.md),
+which is written by the code; an earlier version of this document restated them
+by hand and had drifted from both the pipeline and the manuscript by the time
+anyone noticed. Every threshold named below is set in
+[`config.yaml`](../config.yaml).
 
-Numbers in this document are the ones the pipeline currently produces. If you
-change the code they will move; re-run `scripts/run_pipeline.py` rather than
-trusting this file.
+## Step 1 — the parent sample
 
-## Workflow
+The parent sample is every HASH V/163 entry whose domain flag is `LMC` and whose
+`PNstat` is `T` or `P`. Taking it from HASH rather than assembling it by hand
+does two things: the selection becomes a single reproducible query against a
+public catalogue, and the classifications are the ones the community curates
+rather than ones we impose. Entries carrying any other status are written out
+separately so the paper can tabulate what was set aside and why.
 
-```mermaid
-flowchart TD
-    S1["Step 1 — parent sample<br/>HASH V/163, LMC, PNstat T or P<br/>707 PNe"]
-    S2["Step 2 — radio cross-match, 4.5 arcsec<br/>225 MeerKAT · 82 ASKAP"]
-    S3["Step 3 — inspection and QA<br/>460 unmatched in-field positions<br/>24 recovered visually"]
-    S3D["Step 3d — multi-survey union<br/>249 MeerKAT · 254 either survey"]
-    S4A["Step 4a — spectral index<br/>128 reliable · 45 thermal · 88 steep"]
-    S4B["Step 4b — MIR/radio ratio<br/>152 measurable · median 6.1"]
-    S4C["Step 4c — flux ceiling<br/>242 below · 7 above"]
-    S5["Step 5 — criteria tally<br/>71 High · 105 Possible · 70 Weak · 8 Rejected"]
-    S6["Step 6 — luminosity function<br/>242 fitted · M* = -4.40"]
-    S7["Step 7 — final catalogue<br/>254 rows"]
-    S1 --> S2 --> S3 --> S3D
-    S3D --> S4A --> S5
-    S3D --> S4B --> S5
-    S3D --> S4C --> S5
-    S5 --> S6 --> S7
-```
+Two ancillary catalogues are matched in at the same radius as the radio
+matching, purely to carry extra columns: the R14 list supplies the RP running
+number and the optical class, and the R14 photometric compilation supplies the
+IRAC 8 µm magnitude. Neither adds nor removes a source. Where HASH lists an
+object R14 does not, the optical class is mapped from the HASH status.
 
-## Step 1 — parent sample
+## Step 2 — radio cross-matching
 
-Every HASH V/163 entry with `Domain == LMC` and `PNstat` in `{T, P}`: 545 true
-and 162 probable, 707 in total. A further 138 LMC entries are classified as
-something else (star clusters, SNRs, H II regions) and are set aside.
+Both surveys are matched against the same parent list, so every PN is
+unambiguously detected in MeerKAT, in ASKAP, in both, or in neither, and those
+four numbers sum to the parent sample. The acceptance radius is the same for
+both: three MeerKAT pixels, roughly half the synthesised beam. ASKAP
+counterparts wider than that but inside the outer search radius are recorded
+with a review flag and are not counted as detections.
 
-The sample is taken from HASH rather than assembled by hand so that it can be
-reproduced exactly from a public database. Reid & Parker (2006, 2014) is
-cross-matched in afterwards, but only to carry columns HASH does not hold: the
-RP number, the optical class, and the 8 um photometry. 605 of the 707 carry an
-RP identifier; 265 carry 8 um photometry.
+Matching is nearest-neighbour within the acceptance radius, and the pipeline
+asserts that no radio source is claimed by two PNe. Offsets are computed with
+`spherical_offsets_to`, so ∆α carries the cos δ factor.
 
-## Step 2 — radio cross-match
-
-Optical positions are matched against the MeerKAT 1.295 GHz catalogue and the
-published ASKAP-EMU 888 MHz list within **4.5 arcsec** — three MeerKAT pixels,
-about half the synthesised beam. This yields 225 MeerKAT and 82 ASKAP
-counterparts.
-
-The offsets are centred on zero with a median separation of 0.76 arcsec. ASKAP
-shows a small systematic shift in right ascension (-0.82 arcsec against -0.14
-for MeerKAT), consistent with its coarser beam. At the ASKAP surface density,
-1.6 accidental matches would be expected across the whole parent sample.
+Positional offsets are used to check the matching, not to classify. A tight
+distribution centred on zero shows that the two catalogues share an astrometric
+frame; it says nothing about the nature of any individual object. The number of
+matches expected by chance is computed from each catalogue's surface density
+and written out alongside.
 
 ## Step 3 — inspection and quality assurance
 
-A source finder works to a fixed threshold, so a real but faint nebula never
-enters the catalogue at all. Of the 482 parent PNe left unmatched by Step 2,
-460 lie inside the MeerKAT mosaic and 22 outside it. Each of the 460 is
-inspected on the image and aperture photometry is extracted where emission is
-present at the optical position.
+A source finder works on a fixed island threshold, so a real but faint nebula
+below that threshold never enters the catalogue and would be counted as a
+non-detection. The parent PNe left unmatched by step 2 are split into those
+inside and outside the MeerKAT mosaic, using the mosaic's own finite-pixel mask,
+and each of those inside is examined on the image itself beside MCELS Hα and
+[O III].
 
-24 nebulae are recovered this way, with a median integrated flux density of
-0.020 mJy and a median peak SNR of 4.1. These are the least secure detections
-in the sample and sit almost entirely in the faintest luminosity bins.
+Where emission is present at the optical position, aperture photometry is
+extracted. **The aperture radius is one beam half-width, and the flux is divided
+by the fraction of an unresolved source that aperture encloses.** For a Gaussian
+beam that fraction is `1 - exp(-4 ln2 r²/FWHM²)`, which at `r = FWHM/2` is
+exactly one half; without the correction every one of these fluxes is half its
+true value. The fraction is computed from the configured aperture and beam, not
+assumed. The local noise comes from an annulus well outside the aperture.
 
-`step3b2_reextract_visual.py` applies the aperture correction. It is a separate
-numbered step because it must run: without it the visual fluxes are low by a
-factor of two, and `step3d` raises rather than silently falling back to the
-uncorrected values.
+`step3b2` repeats the measurement in a 2 × FWHM aperture with a local background
+subtracted, where no enclosed-flux correction is needed at all. It is a check on
+the correction, not a replacement for it: at these flux levels the wide aperture
+is noise dominated, which is why the analysis uses the narrow corrected one.
+Nothing downstream reads `step3b2`.
 
-The MeerKAT total is then 249. Combining with ASKAP: 77 detected by both, 172
-by MeerKAT alone, 5 by ASKAP alone — **254 detected by either survey**.
+These recoveries are the least secure detections in the sample and are flagged
+separately throughout.
 
 ## Step 4 — three independent criteria
 
-None of the three uses the optical classification. Each returns pass, fail, or
-*nothing to say*, and the third answer is not a failure.
+Three questions are asked of every detection. Each returns pass, fail, or
+nothing to say, and **none of them uses the optical classification.**
 
-### 4a — in-band spectral index
+### 4a — the in-band spectral index
 
-`log S = alpha log nu + c` by weighted least squares over up to twelve MeerKAT
-sub-bands (908-1656 MHz; channels 8 and 9 dropped for RFI) together with the
-ASKAP 888 MHz point where available. The ASKAP point nearly doubles the
-frequency lever arm, which is why the fit is done here rather than taken from
-the catalogue column.
+An optically thin ionised nebula has a nearly flat radio spectrum, rising
+towards `α = +2` where it becomes optically thick. The dominant contaminant at
+these flux levels is the background radio galaxy population, synchrotron
+dominated near `α = -0.7`. The index is therefore the most direct test of
+whether a radio source at the position of an optical PN is in fact the PN.
 
-An index is used only if `n_pts >= 4`, `alpha_err < 0.5` and `chi2_nu < 10`.
-128 of the 254 survive: 45 thermal (`-0.2 <= alpha <= +2.0`), 35 uncertain, 88
-steep (`alpha < -0.5`).
+`log10 S = α log10 ν + c` is fitted by weighted least squares over the usable
+MeerKAT sub-bands together with the ASKAP point **where the source is detected
+by ASKAP**, with weights propagated from the flux uncertainties into log space
+as `σ_logS = σ_S / (S ln10)`. The MeerKAT broadband point is drawn on the SED
+pages but not fitted: it comes from the same data as the sub-bands and would
+double-count the band.
 
-The steep fraction is **not** a contamination rate. Compared bin by bin against
-the general MeerKAT field, the median index of these PNe exceeds the field by
-only +0.11 below 0.3 mJy, but by +0.95 above 1 mJy. The criterion separates the
-two populations only at the bright end, and most detections are fainter than
-that.
+An index is used only where `n_pts`, `Δα` and `χ²ν` all pass the configured cuts.
+Appendix A of the paper sets out why each. **These cuts are applied in exactly
+one place, in `step4a`.** They used to be applied a second time downstream with
+a looser `Δα`, and with classes assigned to fits that had failed them, which is
+how criterion 4a came to be scored on indices the paper states are unusable.
 
-### 4b — mid-infrared to radio ratio
+Surviving indices are classified thermal, uncertain or steep by the configured
+boundaries. A fit that failed a cut is recorded with the reason and counts as
+neither thermal nor steep; it enters step 5 as *not measurable* for criterion
+4a. The four categories — the three classes plus no-reliable-index — are
+mutually exclusive and sum to the number of detections, which
+`tests/check_bookkeeping.py` asserts.
 
-`F_8um[Jy] = 64.13 * 10^(-m/2.5)`, divided by the radio flux. The ratio is
-computed at the frequencies actually measured rather than scaled to a common
-one: ASKAP 888 MHz where it exists, otherwise MeerKAT 1.295 GHz. 888 MHz is
-preferred because it lies closer to the effective frequency of the Galactic
-calibration.
+The same fit and the same cuts are applied to the whole MeerKAT 5σ catalogue,
+which at these flux levels is overwhelmingly background galaxies, and the two
+populations are compared bin by bin in flux density. Both populations go through
+the same routine in `_support/spectral.py`; the comparison would mean nothing
+otherwise.
 
-152 sources have both measurements; the median ratio is 6.1 against the
-Galactic 4.7 (Cohen et al. 2011).
+### 4b — the mid-infrared to radio ratio
 
-**This criterion does not behave as intended in this sample.** Split by
-spectral class, thermal sources have a median ratio of 23.3 — which the Cohen
-screen calls H II-like — while steep sources have a median of 2.7, inside the
-PN band. The screen places the likely background galaxies inside the PN box and
-the likely PNe outside it. The agreement of the overall median with the
-Galactic value is a coincidence of mixing two populations that sit an order of
-magnitude apart. The Magellanic calibration is known to be higher (9 +/- 2,
-Filipovic et al. 2009; 11.9, Leverenz et al. 2017). We report this rather than
-tune the screen, and a dedicated Magellanic recalibration is needed.
+Dust in an ionised nebula reprocesses stellar radiation into the mid-infrared,
+and the MIR and radio fluxes scale together. Cohen et al. (2011) turned this
+into a diagnostic, combining MGPS-2 at 843 MHz with NVSS at 1.4 GHz and treating
+the pair as one measurement near 1 GHz. They did **not** define it at 1.295 GHz.
 
-### 4c — radio flux ceiling
+The ratio is therefore computed at the frequencies actually measured, rather
+than scaling a flux to a frequency at which there is no data: the ASKAP 888 MHz
+flux where it exists, otherwise the MeerKAT broadband flux. 888 MHz is the
+closer of the two to the effective frequency of the Galactic calibration and is
+preferred for that reason. Every source records which frequency its ratio came
+from. The 8 µm magnitude is converted with the IRAC zero point in `config.yaml`.
 
-Placing NGC 7027 (1.543 Jy at 0.98 kpc) at the LMC distance of 49.59 kpc gives
-0.60 mJy. Filipovic et al. (2009) adopt 2.2 mJy as a working ceiling for the
-Magellanic Clouds, allowing for objects somewhat more luminous and for the
-scaling uncertainty; that value is used here. PNe are optically thin and nearly
-flat-spectrum at these frequencies, so a limit derived at 4.8 GHz carries to
-1.295 GHz essentially unchanged.
+The screen is kept as published so the numbers stay comparable with the Galactic
+literature. The calibration is Galactic, and measurements in the Magellanic
+Clouds place the same ratio higher; the paper reports that the screen does not
+behave as intended for this sample rather than adjusting it.
 
-242 detections fall below the ceiling, 7 above it. Six of the seven are
-optically classified only as probable PNe.
+### 4c — the radio flux ceiling
+
+The radio luminosity of a PN is set by the ionised mass it can hold, which has
+an upper limit. Filipović et al. (2009) placed NGC 7027 at the distance of the
+Magellanic Clouds and adopted a working ceiling allowing for objects somewhat
+more luminous. Because PNe are optically thin at these frequencies and their
+spectra are close to flat, a limit derived at 4.8 GHz carries to 1.295 GHz
+essentially unchanged, which is the only reason one number can serve at both.
+
+The ceiling is applied to the integrated flux density at 1.295 GHz. A source
+with no usable integrated flux is *not measurable*, which is not the same as
+passing.
 
 ## Step 5 — scoring the criteria
 
-Each detection is scored **out of the criteria that could be evaluated for it**,
-not out of a fixed three. An object with no 8 um photometry and a spectrum too
-faint to fit is not a weaker candidate than one with three measurements; it is
-an object we know less about, and scoring it out of three would penalise it for
-the state of the ancillary data.
+Each criterion returns pass, fail, or nothing to say, and the third answer is
+not a failure. A nebula with no 8 µm photometry and a spectrum too faint to fit
+is not a weaker candidate than one with three measurements; it is an object
+about which less is known. Scoring out of a fixed total of three would penalise
+it for the state of the ancillary data rather than for anything about the
+source. Each detection is therefore scored out of the criteria that could
+actually be evaluated for it, and both numbers are carried.
 
-| Class | Rule |
+| Class | Definition |
 |---|---|
-| `Radio_Rejected` | fails a hard physical test: above the ceiling, or radio position more than 4.5 arcsec from the optical |
-| `Radio_High` | every measurable criterion passed, at least two measurable |
+| `Radio_Rejected` | fails a hard physical test: above the flux ceiling, or radio position further from the optical one than the acceptance radius |
+| `Radio_High` | every measurable criterion passed, with at least two measurable |
 | `Radio_Possible` | more than half of the measurable criteria passed |
-| `Radio_Weak` | half or fewer passed |
+| `Radio_Weak` | half or fewer passed, or nothing was measurable |
 
-Result: **71 High, 105 Possible, 70 Weak, 8 Rejected**. Seven of the eight
-rejections are the over-ceiling objects; the eighth is a sub-threshold recovery
-whose radio peak lies 5.70 arcsec from the optical position.
+The class names deliberately avoid the vocabulary the optical catalogues use.
+Rejections are only the two hard physical tests; a steep spectrum or an extreme
+MIR ratio is a failed criterion, not a rejection.
 
-Because the score never uses the optical class, it can be compared against it.
-Of the 202 detections HASH calls true PNe, 67 reach `Radio_High` and 2 are
-rejected; of the 52 it calls probable, 4 reach `Radio_High` and 6 are rejected.
-33 per cent against 8 per cent, with three-quarters of the rejections in a group
-holding a fifth of the sample.
+Nothing in this score uses the optical classification. That is the entire point:
+a score that took the optical class as an input could not then be used to test
+it. `tests/check_bookkeeping.py` rebuilds the verdict from the three criterion
+columns alone and checks it reproduces the published one, so the claim is tested
+rather than asserted.
 
 ## Step 6 — the luminosity function
 
-Fluxes are converted to radio magnitudes at 49.59 kpc:
+Integrated flux densities are converted to luminosities with `L = 4π d² S` at
+the adopted distance and expressed as `M_radio = -2.5 log10(L / L_ref)`. Only
+MeerKAT 1.295 GHz fluxes are used; the ASKAP-only detections have no measurement
+at the reference frequency and are excluded, because mixing 888 MHz and
+1.295 GHz fluxes would combine different frequencies, beams, sensitivities and
+completeness functions.
 
-    L = 4 pi d^2 S
-    M_radio = -2.5 log10(L / 1e20 erg/s/Hz)
+Counts are binned at the configured width. **Two masks are applied and only
+two:** bins brighter than the flux ceiling of step 4c, and bins fainter than the
+completeness limit. The ceiling magnitude is computed from the ceiling flux and
+the distance, so it cannot drift away from either. Masked bins are drawn as open
+symbols so the masking is visible rather than implied.
 
-Counts are binned at 0.3 mag. **Two masks are applied and only two:** bins
-brighter than `M_CEIL = -4.52` (the flux ceiling) and bins fainter than
-`M_lim = -0.5` (the 5-sigma completeness limit). Masked bins are drawn as open
-symbols, never removed, so the masking is visible in every figure.
+An earlier version excluded a further range of bright bins on the grounds that
+they looked anomalous. That exclusion has been removed: the ranking of the
+fitted models depended on it, which is not a property a result should have.
+`step6e` shows the three treatments side by side.
 
-Ten models are fitted by Poisson-weighted least squares, optimised by
-differential evolution then Levenberg-Marquardt, and ranked by AIC. The
-canonical Ciardullo (1989) form is
+Ten functional forms are fitted by Poisson-weighted least squares, optimised by
+differential evolution with a pinned seed and refined by Levenberg–Marquardt,
+and compared by AIC computed as `χ² + 2k` with `k` the number of free
+parameters — consistently for all ten, on the same bins. Among them is the
+canonical Ciardullo (1989) form with its shape parameters held at their optical
+values, and a version with both free.
 
-    N(M) ∝ exp(0.307(M - M*)) * (1 - exp(3(M* - M)))
-
-with both shape parameters fixed at their optical values, leaving `M*` and a
-normalisation free.
-
-**Full sample** (242 fitted, 13 bins): `M* = -4.40`, `chi2_nu = 1.53`, rank 4 of
-10 at `dAIC = 2.32`. The three models above it are empirical forms with more
-free parameters and no physical motivation.
-
-**High-confidence sample** (71 `Radio_High`, 12 bins): `M* = -4.39`,
-`chi2_nu = 1.26`, rank 3 at `dAIC = 1.54`. The cutoff is unchanged within the
-uncertainty, which is the substantive result — it is not produced by residual
-contamination.
-
-The ceiling matters: with the seven over-luminous objects left in, the same
-function returns `chi2_nu = 4.27`.
-
-The Schechter function is rejected decisively in both samples (`dAIC` 105 and
-24), fitting worse than a horizontal line at the mean bin count.
-
-Note also that several fitted parameters in the four-parameter models sit on
-their bounds. That is the fitter reporting that thirteen bins cannot constrain
-them, and the models degenerate towards simpler forms they contain as limits.
-It is a reason to prefer the two-parameter canonical function on grounds beyond
-AIC alone.
-
-## Step 7 — the final catalogue
-
-Assembled, not computed: every value was measured in an earlier step, and this
-step selects columns and renames them for readers outside the pipeline. The
-catalogue therefore cannot disagree with the figures. See the README for the
-column list.
+The high-confidence run uses the same script, the same binning, the same masks
+and the same ten models; only the sample differs, which is what makes the two
+comparable.

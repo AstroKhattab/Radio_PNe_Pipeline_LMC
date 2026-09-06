@@ -25,37 +25,39 @@ Match parameters
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 from matplotlib.gridspec import GridSpecFromSubplotSpec, GridSpec
 from matplotlib.offsetbox import AnchoredText
 from astropy.table import Table, Column
 from astropy.coordinates import SkyCoord
+from astropy.utils.exceptions import AstropyWarning
 import astropy.units as u
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+from _support.plot_style import apply_paper_style
+
+# The VOTables carry non-standard FIELD ids; nothing else is silenced.
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-# Paths
-BASE = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA = os.path.join(BASE, "01_Data")
-OUTS = os.path.join(BASE, "03_Outputs")
-FIGS = os.path.join(BASE, "05_Figures")
+cfg = config.load()
+MKT3_FILE = cfg.data("meerkat_3sigma")
+MKT5_FILE = cfg.data("meerkat_5sigma")
+REID_FILE = cfg.out("step1_parent_catalogue.vot")
 
-MKT3_FILE = os.path.join(DATA, "MeerKAT_3sigma.vot")
-MKT5_FILE = os.path.join(DATA, "MeerKAT_Final_5sigma.vot")
-REID_FILE = os.path.join(OUTS, "step1_parent_catalogue.vot")
+OUT_MATCHED   = cfg.out("step2a_meerkat_matched.vot")
+OUT_UNMATCHED = cfg.out("step2a_meerkat_unmatched.vot")
+OUT_STATS     = cfg.out("step2a_meerkat_match_stats.csv")
+FIG_OFFSETS   = cfg.fig("step2a_meerkat_offsets.pdf")
 
-OUT_MATCHED   = os.path.join(OUTS, "step2a_meerkat_matched.vot")
-OUT_UNMATCHED = os.path.join(OUTS, "step2a_meerkat_unmatched.vot")
-FIG_OFFSETS   = os.path.join(FIGS, "step2a_meerkat_offsets.pdf")
-
-MATCH_RAD  = 4.5  # arcsec
-LOOKUP_RAD = 4.5  # arcsec
+MATCH_RAD  = cfg["crossmatch"]["accept_arcsec"]
+LOOKUP_RAD = cfg["crossmatch"]["accept_arcsec"]
+AREA_DEG2  = cfg["crossmatch"]["meerkat_area_deg2"]
 
 STYLE  = "ggplot"
 HEXBIN = {"gridsize": 30, "cmap": "plasma", "mincnt": 1}
@@ -111,6 +113,16 @@ n_matched   = int(matched_flag.sum())
 n_unmatched = len(reid) - n_matched
 print(f"    Matched  (≤{MATCH_RAD}\"): {n_matched}")
 print(f"    Unmatched          : {n_unmatched}")
+
+# Nearest-neighbour matching can in principle hand the same radio source to two
+# PNe.  It does not here, and the pipeline would be wrong if it ever did.
+used = mkt3_idx_full[matched_flag]
+assert len(set(used)) == len(used), "one MeerKAT source matched to two PNe"
+
+# Chance coincidences expected if the radio sources were distributed at random.
+density = len(mkt3) / AREA_DEG2                       # per deg2
+chance = np.pi * (MATCH_RAD / 3600.0) ** 2 * density * len(reid)
+print(f"    Expected by chance : {chance:.2f} over the whole parent sample")
 
 print("\n    Detection by optical class:")
 print(f"    {'Class':<12} {'Total':>6} {'Detected':>9} {'Fraction':>9}")
@@ -236,10 +248,11 @@ print(f"    {os.path.basename(OUT_UNMATCHED)} -> {n_unmatched} rows")
 # Positional offset figure
 print("\n[6] Generating offset figure...")
 
-ra_opt  = ra_reid[matched_flag & np.isfinite(ra_reid)]
-dec_opt = dec_reid[matched_flag & np.isfinite(ra_reid)]
-ra_rad  = mkt3_col(ra_mkt3)[matched_flag & np.isfinite(ra_reid)]
-dec_rad = mkt3_col(dec_mkt3)[matched_flag & np.isfinite(dec_reid)]
+plot_rows = matched_flag & np.isfinite(ra_reid) & np.isfinite(dec_reid)
+ra_opt  = ra_reid[plot_rows]
+dec_opt = dec_reid[plot_rows]
+ra_rad  = mkt3_col(ra_mkt3)[plot_rows]
+dec_rad = mkt3_col(dec_mkt3)[plot_rows]
 
 c_opt = SkyCoord(ra=ra_opt * u.deg, dec=dec_opt * u.deg)
 c_rad = SkyCoord(ra=ra_rad * u.deg, dec=dec_rad * u.deg)
@@ -303,9 +316,23 @@ plt.savefig(FIG_OFFSETS, format="pdf", bbox_inches="tight", facecolor="white")
 plt.close()
 print(f"    {os.path.basename(FIG_OFFSETS)}  done")
 
+sep_matched = sep_full[matched_flag]
+stats = Table()
+stats["quantity"] = ["n_parent", "n_matched", "n_unmatched", "median_offset_arcsec",
+                     "mean_dra_cosdec_arcsec", "mean_ddec_arcsec",
+                     "std_dra_cosdec_arcsec", "std_ddec_arcsec",
+                     "expected_chance_matches", "n_snr_ge_5", "n_snr_3_to_5"]
+stats["value"] = [len(reid), n_matched, n_unmatched, float(np.nanmedian(sep_matched)),
+                  float(np.mean(x)), float(np.mean(y)),
+                  float(np.std(x)), float(np.std(y)),
+                  float(chance), n_5sig, n_3sig]
+stats.write(OUT_STATS, format="ascii.csv", overwrite=True)
+print(f"    {os.path.basename(OUT_STATS)}")
+
 print("\nstep2a complete")
 print(f"  Reid sources   : {len(reid)}")
 print(f"  Matched        : {n_matched} ({n_matched/len(reid)*100:.1f}%)")
 print(f"  Unmatched      : {n_unmatched}")
 print(f"  With spindex   : {n_with}")
+print(f"  Median offset  : {np.nanmedian(sep_matched):.2f} arcsec")
 print(f"  SNR >= 5       : {n_5sig}")

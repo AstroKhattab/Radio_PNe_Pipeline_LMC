@@ -1,0 +1,50 @@
+# Sub-threshold MeerKAT detections identified by eye.
+#
+# Every parent PN left unmatched by step 2a and lying inside the mosaic is
+# rendered as a radio / Halpha / [O III] cutout page by step 3a
+# (04_Inspect/figures/step3a_meerkat_to_check_cutouts.pdf).  The RP numbers
+# below are the pages that show emission at the optical position.  This is the
+# only place in the pipeline where a human decision enters, and it is recorded
+# here rather than inside a script so that it can be reviewed and changed
+# without touching code.
+#
+# Second column, optional: peak-search radius in arcsec, overriding
+# visual.search_arcsec.  Zero means measure at the optical position without
+# searching, which is what a crowded field needs.
+#
+# Eight of these RP numbers are not in the parent sample: HASH V/163 does not
+# list them as true or probable PNe, so they were dropped at step 1.  They are
+# kept in the file because they were inspected, and step 3b reports them.
+
+RP607
+RP650
+RP652
+RP656
+RP980
+RP1114   0.0    # bright extended source nearby; measure at the optical position
+RP1234
+RP1324
+RP1352
+RP1557
+RP1606
+RP1608
+RP1634
+RP1636
+RP1684
+RP1687
+RP1695
+RP2278
+RP2294
+RP2297
+RP2304
+RP2311
+RP2312
+RP2326
+RP2708   0.0    # peak search grabbed the wrong source
+RP3449
+RP3464
+RP3661
+RP4065
+RP4081
+RP4176
+RP4285

@@ -27,21 +27,40 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 from matplotlib.gridspec import GridSpec
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.offsetbox import AnchoredText
 from astropy.table import Table, Column
+from astropy.utils.exceptions import AstropyWarning
 from scipy.optimize import curve_fit, differential_evolution
 from scipy.stats import skewnorm, t as student_t
 
-warnings.filterwarnings("ignore")
-apply_paper_style()
-np.random.seed(42)
+from _support.plot_style import apply_paper_style
 
-BASE=os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-OUTS=os.path.join(BASE,"03_Outputs"); FIGS=os.path.join(BASE,"05_Figures")
-INPUT_FILE=os.path.join(OUTS,"step5a_confidence.vot")
+warnings.simplefilter("ignore", AstropyWarning)
+apply_paper_style()
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+
+cfg = config.load()
+D_KPC = cfg["distance"]["lmc_kpc"]
+D_CM = cfg.distance_cm()
+L_REF = cfg["pnlf"]["reference_luminosity_cgs"]
+BIN_W = cfg["pnlf"]["bin_width_mag"]
+M_LIM = cfg["pnlf"]["completeness_limit_mag"]
+# The bright mask is the flux ceiling of Step 4c expressed as a magnitude at
+# the adopted distance.  Computing it here means it cannot drift away from the
+# ceiling or the distance it depends on.
+M_CEIL = cfg.ceiling_magnitude()
+S_MLIM_UJY = cfg.completeness_flux_ujy()
+RMS_MEERKAT = cfg["meerkat"]["median_rms_ujy"]
+CIAR_ALPHA = cfg["pnlf"]["ciardullo_alpha"]
+CIAR_BETA = cfg["pnlf"]["ciardullo_beta"]
+SEED = cfg["pnlf"]["fit_seed"]
+np.random.seed(SEED)
+
+INPUT_FILE = cfg.out("step5d_criteria_tally.vot")
 
 # Which sample to fit.  The default is every radio detection; "high" restricts
 # to the sources the Step 5 criteria tally places in Radio_High, so that the
@@ -57,27 +76,15 @@ if SAMPLE not in ("full", "high"):
 TAG = "" if SAMPLE == "full" else "_high"
 STEP = "step6a" if SAMPLE == "full" else "step6g"
 
-OUT_VOT=os.path.join(OUTS,f"{STEP}_pnlf{TAG}.vot")
-OUT_FIG=os.path.join(FIGS,f"{STEP}_pnlf_empirical_fits{TAG}.pdf")
+OUT_VOT = cfg.out(f"{STEP}_pnlf{TAG}.vot")
+OUT_FIG = cfg.fig(f"{STEP}_pnlf_empirical_fits{TAG}.pdf")
 
-# D_KPC=49.97; D_CM=D_KPC*3.0856776e21; L_REF=1e20
-# updated 2026-08-30: Pietrzynski et al. 2019 gives 49.59 kpc (mu = 18.477); 49.97 kpc was inconsistent with the quoted modulus
-D_KPC=49.59; D_CM=D_KPC*3.0856776e21; L_REF=1e20
-BIN_W=0.3; M_LIM=-0.5
-# Physical bright limit.  2.2 mJy at 49.59 kpc (Filipovic et al. 2009 ceiling;
-# NGC 7027 placed at the LMC distance gives 0.60 mJy) works out to
-# M_radio = -4.53, and the sample separates cleanly there: the faintest source
-# above the ceiling is 2.35 mJy at M = -4.60, the brightest one below it is
-# 2.18 mJy at M = -4.52.  Sources brighter than this are more luminous than a
-# planetary nebula at LMC distance can be, so they are not drawn from the
-# luminosity function being fitted and are removed before binning.
-M_CEIL=-4.52
-# The hand-picked "anomalous zone" that used to exclude bins between -4.4 and
-# -3.7 has been removed.  Only two things are masked now: this ceiling and the
-# 5-sigma completeness limit at M_LIM.
-# S_MLIM_UJY=53.05; RMS_MEERKAT=10.0
-# updated 2026-08-30: median rms 11 uJy/beam from Cotton et al. 2026 / Rajabpour et al. 2026; S(M_lim) recomputed at d = 49.59 kpc
-S_MLIM_UJY=53.87; RMS_MEERKAT=11.0
+# Only two things are masked: the flux ceiling of Step 4c, and the 5 sigma
+# completeness limit.  The hand-picked "anomalous zone" that once excluded
+# bins between -4.4 and -3.7 has been removed.
+print(f"    ceiling {cfg['flux_ceiling']['ceiling_mjy']} mJy at {D_KPC} kpc"
+      f" -> M_CEIL = {M_CEIL:.3f};  M_LIM = {M_LIM} -> {S_MLIM_UJY:.1f} uJy"
+      f" ({S_MLIM_UJY / RMS_MEERKAT:.1f} sigma)")
 
 print("step6a: fitting the empirical radio PNLF models")
 
@@ -85,13 +92,8 @@ print("\n[1] Loading & computing luminosity ...")
 det=Table.read(INPUT_FILE,format="votable")
 
 if SAMPLE == "high":
-    tally_path = os.path.join(OUTS, "step5d_criteria_tally.vot")
-    tally = Table.read(tally_path, format="votable")
-    keep_ids = {str(r).strip() for r, c in
-                zip(tally["RP_ID"], tally["radio_only_class"])
-                if str(c).strip() == "Radio_High"}
-    det_ids = np.array([str(x).strip() for x in det["RP_ID"]])
-    det = det[np.isin(det_ids, list(keep_ids))]
+    det = det[np.array([str(x).strip() for x in det["radio_only_class"]])
+              == "Radio_High"]
     print(f"    sample: Radio_High only -> {len(det)} of the radio detections")
 else:
     print(f"    sample: all radio detections -> {len(det)}")
@@ -203,11 +205,10 @@ def f_ciar_free(m,N0,Ms,alpha,beta):
 def f_ciar_canonical(m,N0,Ms):
     """
     Ciardullo (1989) PNLF with canonical optical parameters fixed:
-      alpha = 0.307 (faint-end slope, fixed)
-      beta  = 3.0   (bright-end cutoff, fixed)
+      alpha and beta fixed at the optical values in config.yaml
     Only N0 (amplitude) and M* (bright cutoff) are free — k=2.
     """
-    v=N0*np.exp(0.307*(m-Ms))*(1-np.exp(3.0*(Ms-m)))
+    v=N0*np.exp(CIAR_ALPHA*(m-Ms))*(1-np.exp(CIAR_BETA*(Ms-m)))
     return np.where(m>Ms,np.maximum(v,1e-4),1e-4)
 
 # Equation strings shown on the figure panels
@@ -273,13 +274,14 @@ def make_equations(nm, popt):
 
     elif nm=="Ciardullo (canonical)":
         Lstar=L_REF*10**(-p[1]/2.5)
-        gen=("N(M) = N0 * exp(0.307*(M - M*)) * (1 - exp(3.0*(M* - M)))\n"
-             "alpha = 0.307,  beta = 3.0  (FIXED — Ciardullo 1989 canonical optical values)\n"
+        gen=(f"N(M) = N0 * exp({CIAR_ALPHA}*(M - M*)) * (1 - exp({CIAR_BETA}*(M* - M)))\n"
+             f"alpha = {CIAR_ALPHA},  beta = {CIAR_BETA}  (FIXED — Ciardullo 1989 optical values)\n"
              "Only N0 and M* are free  (k=2) — most parsimonious Ciardullo form")
-        fit=("N(M) = {:.2f} * exp(0.307*(M - ({:.3f}))) * (1 - exp(3.0*({:.3f} - M)))\n"
-             "N0={:.2f}  M*={:.3f}  alpha=0.307 (fixed)  beta=3.0 (fixed)\n"
+        fit=("N(M) = {:.2f} * exp({:.3f}*(M - ({:.3f}))) * (1 - exp({:.1f}*({:.3f} - M)))\n"
+             "N0={:.2f}  M*={:.3f}  alpha={:.3f} (fixed)  beta={:.1f} (fixed)\n"
              "L* = 10^{:.3f} erg/s/Hz"
-             .format(p[0],p[1],p[1],p[0],p[1],np.log10(Lstar)))
+             .format(p[0],CIAR_ALPHA,p[1],CIAR_BETA,p[1],p[0],p[1],
+                     CIAR_ALPHA,CIAR_BETA,np.log10(Lstar)))
     else:
         gen=f"Model: {nm}"; fit=str(popt)
     return gen, fit
@@ -294,8 +296,9 @@ def cstats(y,yf,ye,k):
 def try_fit(nm,func,lb,ub,p0):
     def res(p): return np.sum(((my_f-func(mx_f,*p))/mye_f)**2)
     try:
-        de=differential_evolution(res,bounds=list(zip(lb,ub)),seed=42,maxiter=12000,
-                                   tol=1e-13,popsize=40,mutation=(0.3,1.9))
+        de=differential_evolution(res,bounds=list(zip(lb,ub)),seed=SEED,maxiter=12000,
+                                   tol=cfg["pnlf"]["de_tolerance"],
+                                   popsize=cfg["pnlf"]["de_popsize"],mutation=(0.3,1.9))
         popt,pcov=curve_fit(func,mx_f,my_f,p0=de.x,bounds=(lb,ub),
                              sigma=mye_f,absolute_sigma=True,maxfev=300000)
         yfit=func(mx_f,*popt); perr=np.sqrt(np.diag(pcov))
@@ -367,11 +370,11 @@ model_defs = [
      f_ciar_free,
      [0, Ms_min, 0.05, 1.0],      # N0, M*, alpha>=0.05, beta>=1.0
      [1e6, Ms_max, 8.0, 30.0],
-     [my_f.max()*3, Ms_max-0.5, 0.307, 3.0]),
+     [my_f.max()*3, Ms_max-0.5, CIAR_ALPHA, CIAR_BETA]),
 
     ("Ciardullo (canonical)",
      f_ciar_canonical,
-     [0, Ms_min],                  # N0, M* only (alpha=0.307, beta=3.0 fixed)
+     [0, Ms_min],                  # N0 and M* only; alpha and beta are fixed
      [1e6, Ms_max],
      [my_f.max()*3, Ms_max-0.5]),
 ]
@@ -387,8 +390,8 @@ ranked=sorted(results.items(),key=lambda x:x[1]["s"]["aic"])
 best_name,best_r=ranked[0]
 
 # ---- machine-written model-parameter table for the paper appendix ----------
-_ptab = os.path.join(OUTS, f"{STEP}_model_parameters{TAG}.tex")
-_pcsv = os.path.join(OUTS, f"{STEP}_model_parameters{TAG}.csv")
+_ptab = cfg.table(f"{STEP}_model_parameters{TAG}.tex")
+_pcsv = cfg.out(f"{STEP}_model_parameters{TAG}.csv")
 _aicmin = ranked[0][1]["s"]["aic"]
 with open(_pcsv, "w") as _fc, open(_ptab, "w") as _ft:
     _fc.write("rank,model,k,dof,r2,aic,delta_aic,bic,redchi,parameters\n")
@@ -691,8 +694,9 @@ if "Ciardullo (canonical)" in results:
     Ls=L_REF*10**(-pp[1]/2.5)
     rank_c=[nm for nm,_ in ranked].index("Ciardullo (canonical)")+1
     print(f"\n  Ciardullo (canonical) — rank #{rank_c}:")
-    print(f"    N(M) = {pp[0]:.2f} * exp(0.307*(M-({pp[1]:.4f}))) * (1-exp(3.0*({pp[1]:.4f}-M)))")
-    print(f"    N0={pp[0]:.2f}  M*={pp[1]:.4f}  alpha=0.307 (fixed)  beta=3.0 (fixed)")
+    print(f"    N(M) = {pp[0]:.2f} * exp({CIAR_ALPHA}*(M-({pp[1]:.4f})))"
+          f" * (1-exp({CIAR_BETA}*({pp[1]:.4f}-M)))")
+    print(f"    N0={pp[0]:.2f}  M*={pp[1]:.4f}  alpha={CIAR_ALPHA} (fixed)  beta={CIAR_BETA} (fixed)")
     print(f"    L* = 10^{np.log10(Ls):.4f} erg/s/Hz")
     print(f"    R² = {rc['s']['r2']:.4f}  AIC = {rc['s']['aic']:.2f}  red-χ² = {rc['s']['redchi']:.3f}")
 

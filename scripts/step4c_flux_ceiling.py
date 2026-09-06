@@ -17,25 +17,27 @@ O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
 import os
+import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from astropy.table import Table, Column
 
-BASE = os.environ.get("PNBASE", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUTS = os.path.join(BASE, "03_Outputs")
-FIGS = os.path.join(BASE, "05_Figures")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-IN_FILE = os.path.join(OUTS, "step4b_mir_radio_ratio.vot")
-OUT_VOT = os.path.join(OUTS, "step4c_flux_ceiling.vot")
-OUT_PDF = os.path.join(FIGS, "step4c_flux_ceiling.pdf")
+cfg = config.load()
+IN_FILE = cfg.out("step4b_mir_radio_ratio.vot")
+OUT_VOT = cfg.out("step4c_flux_ceiling.vot")
+OUT_CSV = cfg.out("step4c_above_ceiling.csv")
+OUT_PDF = cfg.fig("step4c_flux_ceiling.pdf")
 
-CEILING_MJY = 2.2      # Filipovic et al. 2009, NGC 7027 placed at the LMC distance
-DIST_KPC = 49.59       # Pietrzynski et al. 2019
-NGC7027_JY = 1.543     # Zijlstra et al. 2008, 1.465 GHz integrated
-NGC7027_KPC = 0.98     # Zijlstra et al. 2008
-SMP83_MJY = 1.36       # Pennock et al. 2021, brightest LMC PN detected to date
+CEILING_MJY = cfg["flux_ceiling"]["ceiling_mjy"]
+DIST_KPC = cfg["distance"]["lmc_kpc"]
+NGC7027_JY = cfg["flux_ceiling"]["ngc7027_jy"]
+NGC7027_KPC = cfg["flux_ceiling"]["ngc7027_kpc"]
+SMP83_MJY = cfg["flux_ceiling"]["smp_lmc_83_mjy"]
 
 COLOURS = {"thermal": "#1f6fb4", "uncertain": "#e0a020",
            "steep": "#c0392b", "no_fit": "#b8bec8"}
@@ -80,31 +82,34 @@ print(f"  ceiling {CEILING_MJY} mJy: {n_below} below, {n_above} above, {n_none} 
 names = text_col(cat, "Name")
 ids = text_col(cat, "RP_ID")
 sp = text_col(cat, "sp_class") if "sp_class" in cat.colnames else np.full(len(cat), "")
-for i in np.where(verdict == "above_ceiling")[0]:
-    label = names[i] if names[i] else ids[i]
-    print(f"    rejected: {label:12s} {flux[i]:6.2f} mJy  {sp[i]}")
+ngc7027_at_lmc = NGC7027_JY * (NGC7027_KPC / DIST_KPC) ** 2 * 1e3
+above = np.where(verdict == "above_ceiling")[0]
+order = above[np.argsort(-flux[above])]
+pnstat = text_col(cat, "hash_pnstat")
+listing = Table()
+listing["identifier"] = [names[i] if names[i] else ids[i] for i in order]
+listing["RP_ID"] = ids[order]
+listing["S_1295_mJy"] = np.round(flux[order], 2)
+listing["hash_pnstat"] = pnstat[order]
+listing["sp_class"] = sp[order]
+listing["S_over_S_7027"] = np.round(flux[order] / ngc7027_at_lmc, 1)
+listing.write(OUT_CSV, format="ascii.csv", overwrite=True)
+for row in listing:
+    print(f"    rejected: {row['identifier']:12s} {row['S_1295_mJy']:6.2f} mJy  "
+          f"{row['hash_pnstat']}  {row['sp_class']}  "
+          f"{row['S_over_S_7027']:.1f}x NGC 7027")
 
 cat.write(OUT_VOT, format="votable", overwrite=True)
 print(f"  wrote {os.path.basename(OUT_VOT)}")
 
-# Spectral class for the colouring.  The recut table is produced later in the
-# chain, so this step normally has to use the class from Step 4a; the earlier
-# code looked only for the recut file and, not finding it, coloured every point
-# as "no fit", which left the right-hand panel empty.
-recut_path = os.path.join(OUTS, "step5b_spectral_index_recut.vot")
-if os.path.exists(recut_path):
-    sp_class = text_col(Table.read(recut_path, format="votable"), "sp_class_recut")
-elif "sp_class" in cat.colnames:
-    sp_class = text_col(cat, "sp_class")
-    sp_class[sp_class == "no_reliable_alpha"] = "no_fit"
-else:
-    sp_class = np.full(len(cat), "no_fit")
-
-ngc7027_at_lmc = NGC7027_JY * (NGC7027_KPC / DIST_KPC) ** 2 * 1e3
+# Spectral class for the colouring, from Step 4a.
+sp_class = text_col(cat, "sp_class")
+sp_class[sp_class == "no_reliable_alpha"] = "no_fit"
 
 fig, (ax_hist, ax_scatter) = plt.subplots(1, 2, figsize=(9.2, 3.6))
 
-bins = np.logspace(np.log10(0.008), np.log10(5.0), 32)
+x_top = max(5.0, float(np.nanmax(flux)) * 1.3)
+bins = np.logspace(np.log10(0.008), np.log10(x_top), 32)
 bottom = np.zeros(len(bins) - 1)
 for cls in ("no_fit", "uncertain", "thermal", "steep"):
     sel = measured & (sp_class == cls)
@@ -116,7 +121,7 @@ for cls in ("no_fit", "uncertain", "thermal", "steep"):
 
 for value, style in ((ngc7027_at_lmc, ":"), (SMP83_MJY, "-."), (CEILING_MJY, "-")):
     ax_hist.axvline(value, color="0.15", linestyle=style, linewidth=1.1)
-ax_hist.axvspan(CEILING_MJY, 5.0, color="#c0392b", alpha=0.09)
+ax_hist.axvspan(CEILING_MJY, x_top, color="#c0392b", alpha=0.09)
 ax_hist.annotate(f"NGC 7027\nat LMC\n{ngc7027_at_lmc:.2f}", xy=(ngc7027_at_lmc, 0.97),
                  xycoords=("data", "axes fraction"), ha="right", va="top", fontsize=6.5, color="0.3")
 ax_hist.annotate(f"SMP LMC 83\n{SMP83_MJY:.2f}", xy=(SMP83_MJY, 0.63),
@@ -124,7 +129,7 @@ ax_hist.annotate(f"SMP LMC 83\n{SMP83_MJY:.2f}", xy=(SMP83_MJY, 0.63),
 ax_hist.annotate(f"ceiling {CEILING_MJY} mJy", xy=(CEILING_MJY, 0.97),
                  xycoords=("data", "axes fraction"), ha="left", va="top", fontsize=7, color="#8e2820")
 ax_hist.set_xscale("log")
-ax_hist.set_xlim(0.008, 5.0)
+ax_hist.set_xlim(0.008, x_top)
 ax_hist.set_xlabel(r"$S_{\rm 1.295\,GHz}$ (mJy)")
 ax_hist.set_ylabel("Number of sources")
 ax_hist.legend(fontsize=6.5, loc="upper left", frameon=False)
@@ -137,11 +142,11 @@ for cls in ("thermal", "uncertain", "steep"):
     ax_scatter.scatter(flux[sel], alpha[sel], s=13, color=COLOURS[cls],
                        edgecolor="white", linewidth=0.3, label=cls)
 ax_scatter.axvline(CEILING_MJY, color="0.15", linewidth=1.1)
-ax_scatter.axvspan(CEILING_MJY, 5.0, color="#c0392b", alpha=0.09)
+ax_scatter.axvspan(CEILING_MJY, x_top, color="#c0392b", alpha=0.09)
 ax_scatter.axhline(-0.5, color="0.55", linestyle="--", linewidth=0.9)
 ax_scatter.axhline(-0.2, color="0.55", linestyle="--", linewidth=0.9)
 ax_scatter.set_xscale("log")
-ax_scatter.set_xlim(0.008, 5.0)
+ax_scatter.set_xlim(0.008, x_top)
 ax_scatter.set_xlabel(r"$S_{\rm 1.295\,GHz}$ (mJy)")
 ax_scatter.set_ylabel(r"combined spectral index $\alpha$")
 ax_scatter.legend(fontsize=6.5, loc="lower left", frameon=False)

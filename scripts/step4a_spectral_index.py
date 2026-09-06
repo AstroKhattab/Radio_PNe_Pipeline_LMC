@@ -42,6 +42,7 @@ O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
 import os
+import sys
 import warnings
 
 import astropy.units as u
@@ -49,60 +50,47 @@ import matplotlib
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.table import Column, Table
+from astropy.utils.exceptions import AstropyWarning
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import LogLocator, NullFormatter, ScalarFormatter
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config, spectral
+from _support.plot_style import apply_paper_style
+
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-BASE = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA = os.path.join(BASE, "01_Data")
-OUTS = os.path.join(BASE, "03_Outputs")
-FIGS = os.path.join(BASE, "05_Figures")
-INSP = os.path.join(BASE, "04_Inspect", "figures")
+cfg = config.load()
+CUTS = cfg["spectral_index"]
 
-DETECTED_FILE = os.path.join(OUTS, "step3d_multisurvey_detected_union.vot")
-MKT5_FILE = os.path.join(DATA, "MeerKAT_Final_5sigma.vot")
-OUT_VOT = os.path.join(OUTS, "step4a_spectral_index.vot")
-FIG_HIST = os.path.join(FIGS, "step4a_spectral_index_distribution.pdf")
-
-LOOKUP_RAD = 4.5
-STEEP_BOUNDARY = -0.5
-THERMAL_BOUNDARY = -0.2
-THERMAL_MAXIMUM = 2.0
-MIN_FIT_POINTS = 2
-MIN_RELIABLE_POINTS = 4
-MAX_REDUCED_CHISQ = 10.0
-MAX_ALPHA_ERROR = 0.5
-ASKAP_FREQ_GHZ = 0.888
-MEERKAT_CENTRAL_FREQ_GHZ = 1.295
-
-# Channels 8 and 9 were omitted from the published spectral fits because of
-# RFI.  Astropy appends _1 to the integrated-flux FIELD names in this
-# VOTable (the XML contains duplicate identifiers), so the resolver below
-# accepts both the Astropy names and their unsuffixed equivalents.
-CHANNEL_FREQUENCIES_MHZ = {
-    "ch2": 908.037,
-    "ch3": 952.342,
-    "ch4": 996.646,
-    "ch5": 1043.46,
-    "ch6": 1092.78,
-    "ch7": 1144.61,
-    "ch10": 1317.23,
-    "ch11": 1381.18,
-    "ch12": 1448.05,
-    "ch13": 1519.94,
-    "ch14": 1593.92,
-    "ch15": 1656.2,
-}
-
-os.makedirs(OUTS, exist_ok=True)
-os.makedirs(FIGS, exist_ok=True)
+DETECTED_FILE = cfg.out("step3d_multisurvey_detected_union.vot")
+MKT5_FILE = cfg.data("meerkat_5sigma")
+OUT_VOT = cfg.out("step4a_spectral_index.vot")
+OUT_FIELD = cfg.out("step4a_field_comparison.csv")
+FIG_HIST = cfg.fig("step4a_spectral_index_distribution.pdf")
+INSP = cfg.inspect("figures")
 os.makedirs(INSP, exist_ok=True)
+
+LOOKUP_RAD = cfg["crossmatch"]["accept_arcsec"]
+STEEP_BOUNDARY = CUTS["steep_below"]
+THERMAL_BOUNDARY, THERMAL_MAXIMUM = CUTS["thermal_range"]
+MIN_FIT_POINTS = CUTS["min_points_to_fit"]
+MIN_RELIABLE_POINTS = CUTS["min_points_reliable"]
+MAX_REDUCED_CHISQ = CUTS["max_reduced_chisq"]
+MAX_ALPHA_ERROR = CUTS["max_alpha_error"]
+DEFAULT_ERR_FRAC = CUTS["default_flux_error_fraction"]
+FIELD_BINS = CUTS["field_comparison_bins"]
+ASKAP_FREQ_GHZ = cfg["askap"]["frequency_mhz"] / 1000.0
+ASKAP_CAL_FRAC = cfg["askap"]["calibration_fraction"]
+MEERKAT_CENTRAL_FREQ_GHZ = cfg["meerkat"]["frequency_ghz"]
+
+# Astropy appends _1 to the integrated-flux FIELD names in this VOTable (the
+# XML carries duplicate identifiers), so the resolver below accepts both.
+CHANNEL_FREQUENCIES_MHZ = cfg["meerkat"]["channels"]
 
 print("step4a: fitting spectral indices")
 
@@ -172,7 +160,7 @@ def extract_meerkat_channels(row):
         if not (np.isfinite(flux_jy) and flux_jy > 0):
             continue
         if not (np.isfinite(error_jy) and error_jy > 0):
-            error_jy = 0.10 * flux_jy
+            error_jy = DEFAULT_ERR_FRAC * flux_jy
         frequencies.append(frequency_mhz / 1000.0)
         fluxes.append(flux_jy * 1000.0)
         errors.append(error_jy * 1000.0)
@@ -186,7 +174,7 @@ def askap_point(k):
     if not (np.isfinite(flux) and flux > 0):
         return None
     if not (np.isfinite(error) and error > 0):
-        error = 0.08 * flux
+        error = ASKAP_CAL_FRAC * flux
     return ASKAP_FREQ_GHZ, flux, error
 
 def combined_sed(k):
@@ -205,37 +193,6 @@ def combined_sed(k):
     return (mk_freq, mk_flux, mk_error, ap,
             fit_freq[order], fit_flux[order], fit_error[order])
 
-def weighted_spectral_fit(frequencies, fluxes, errors):
-    """Weighted linear fit to log10(S) = alpha*log10(nu) + intercept."""
-    valid = (
-        np.isfinite(frequencies) & (frequencies > 0) &
-        np.isfinite(fluxes) & (fluxes > 0) &
-        np.isfinite(errors) & (errors > 0)
-    )
-    frequencies = frequencies[valid]
-    fluxes = fluxes[valid]
-    errors = errors[valid]
-    if len(frequencies) < MIN_FIT_POINTS:
-        return np.nan, np.nan, np.nan, np.nan
-    x = np.log10(frequencies)
-    y = np.log10(fluxes)
-    sigma_y = errors / (fluxes * np.log(10.0))
-    weights = 1.0 / sigma_y ** 2
-    design = np.column_stack([x, np.ones_like(x)])
-    normal = design.T @ (weights[:, None] * design)
-    try:
-        covariance = np.linalg.inv(normal)
-    except np.linalg.LinAlgError:
-        return np.nan, np.nan, np.nan, np.nan
-    parameters = covariance @ (design.T @ (weights * y))
-    alpha, intercept = parameters
-    residuals = y - (alpha * x + intercept)
-    chi2 = float(np.sum((residuals / sigma_y) ** 2))
-    dof = len(x) - 2
-    reduced_chi2 = chi2 / dof if dof > 0 else np.nan
-    alpha_error = float(np.sqrt(max(covariance[0, 0], 0.0)))
-    return float(alpha), float(intercept), alpha_error, reduced_chi2
-
 n_sources = len(detected)
 alpha = np.full(n_sources, np.nan)
 intercept = np.full(n_sources, np.nan)
@@ -248,14 +205,20 @@ mkt_ch4_flux_jy = np.full(n_sources, np.nan)
 mkt_ch4_error_jy = np.full(n_sources, np.nan)
 
 print("\n[2] Fitting all available MeerKAT + ASKAP detections...")
+# One padded row per source, so the fit is the same call the field comparison
+# below makes.  Padding with NaN drops those slots from the fit.
+n_slots = len(CHANNEL_FREQUENCIES_MHZ) + 1
+sed_freq = np.full((n_sources, n_slots), np.nan)
+sed_flux = np.full((n_sources, n_slots), np.nan)
+sed_err = np.full((n_sources, n_slots), np.nan)
 for k in range(n_sources):
     mk_f, mk_s, mk_e, ap, fit_f, fit_s, fit_e = combined_sed(k)
     n_meerkat_points[k] = len(mk_f)
     has_askap_point[k] = int(ap is not None)
     n_fit_points[k] = len(fit_f)
-    alpha[k], intercept[k], alpha_error[k], reduced_chi2[k] = weighted_spectral_fit(
-        fit_f, fit_s, fit_e
-    )
+    sed_freq[k, :len(fit_f)] = fit_f
+    sed_flux[k, :len(fit_f)] = fit_s
+    sed_err[k, :len(fit_f)] = fit_e
     if mkt5_idx[k] >= 0 and "ch4" in available_channels:
         _, flux_column, error_column = available_channels["ch4"]
         row = mkt5[mkt5_idx[k]]
@@ -268,6 +231,8 @@ for k in range(n_sources):
                     mkt_ch4_error_jy[k] = ch4_error
         except (TypeError, ValueError):
             pass
+
+alpha, intercept, alpha_error, reduced_chi2, _ = spectral.fit(sed_freq, sed_flux, sed_err)
 
 # Preserve the published MeerKAT-only fit for comparison.
 alpha_mkt_catalogue = np.full(n_sources, np.nan)
@@ -359,7 +324,51 @@ for column in [
 detected.write(OUT_VOT, format="votable", overwrite=True)
 print(f"    {OUT_VOT}")
 
-print("\n[4] Generating spectral-index distribution...")
+print("\n[4] Comparing against the general radio field...")
+# The same fit and the same cuts, applied to the whole MeerKAT 5 sigma
+# catalogue, which at these flux levels is overwhelmingly background radio
+# galaxies.  Without this the steep fraction among the PNe has nothing to be
+# read against.
+n_field = len(mkt5)
+field_freq = np.full((n_field, len(available_channels)), np.nan)
+field_flux = np.full((n_field, len(available_channels)), np.nan)
+field_err = np.full((n_field, len(available_channels)), np.nan)
+for slot, (frequency_mhz, flux_column, error_column) in enumerate(available_channels.values()):
+    flux = np.ma.asarray(mkt5[flux_column], dtype=float).filled(np.nan) * 1000.0
+    error = (np.ma.asarray(mkt5[error_column], dtype=float).filled(np.nan) * 1000.0
+             if error_column else np.full(n_field, np.nan))
+    error = np.where(np.isfinite(error) & (error > 0), error, DEFAULT_ERR_FRAC * flux)
+    field_freq[:, slot] = frequency_mhz / 1000.0
+    field_flux[:, slot] = np.where(flux > 0, flux, np.nan)
+    field_err[:, slot] = error
+
+field_alpha, _, field_alpha_err, field_chi2, field_n = spectral.fit(
+    field_freq, field_flux, field_err)
+field_ok = spectral.reliable(field_n, field_alpha_err, field_chi2, CUTS)
+field_S = np.ma.asarray(mkt5["ch0_int_flux_1"], dtype=float).filled(np.nan) * 1000.0
+
+pn_S = np.asarray(detected["mkt_int_flux_Jy"], dtype=float) * 1000.0
+pn_ok = spectral.reliable(n_fit_points, alpha_error, reduced_chi2, CUTS)
+
+rows = []
+for low, high in zip(FIELD_BINS[:-1], FIELD_BINS[1:]):
+    in_pn = pn_ok & np.isfinite(pn_S) & (pn_S >= low) & (pn_S < high)
+    in_field = field_ok & np.isfinite(field_S) & (field_S >= low) & (field_S < high)
+    median_pn = float(np.median(alpha[in_pn])) if in_pn.any() else np.nan
+    median_field = float(np.median(field_alpha[in_field])) if in_field.any() else np.nan
+    rows.append((low, high, int(in_pn.sum()), median_pn,
+                 int(in_field.sum()), median_field, median_pn - median_field))
+    print(f"    {low:>4.1f}-{high:<5.1f} mJy   PNe N={in_pn.sum():>4} median alpha={median_pn:+.2f}"
+          f"   field N={in_field.sum():>6} median alpha={median_field:+.2f}"
+          f"   offset={median_pn - median_field:+.2f}")
+
+field_table = Table(rows=rows, names=("flux_low_mJy", "flux_high_mJy", "n_pne",
+                                      "median_alpha_pne", "n_field",
+                                      "median_alpha_field", "alpha_offset"))
+field_table.write(OUT_FIELD, format="ascii.csv", overwrite=True)
+print(f"    {os.path.basename(OUT_FIELD)}")
+
+print("\n[5] Generating spectral-index distribution...")
 fig, ax = plt.subplots(figsize=(8, 5))
 bins = np.arange(-1.5, 2.05, 0.10)
 for label, color, display in [
@@ -460,7 +469,7 @@ def write_sed_pdf(output_path, indices, category):
             pdf.savefig(fig, dpi=150, bbox_inches="tight")
             plt.close(fig)
 
-print("\n[5] Generating one SED page for every detected Reid source...")
+print("\n[6] Generating one SED page for every detected Reid source...")
 pdf_outputs = []
 for category in ["thermal", "uncertain", "steep", "no_reliable_alpha"]:
     indices = np.where(sp_class == category)[0]

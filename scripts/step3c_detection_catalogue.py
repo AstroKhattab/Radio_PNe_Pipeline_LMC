@@ -6,15 +6,12 @@ associated paper figures. The sky map also shows ASKAP coverage and overlap.
 
 Inputs
 ------
-    03_Outputs/step2a_meerkat_matched.vot — 188 cross-matched sources
-    03_Outputs/step3b_meerkat_visual.vot — visually confirmed sources
-                                     *** Optional: if not found, proceeds
-                                         with cross-matched only ***
-    03_Outputs/step3a_meerkat_outside.vot — outside MeerKAT region
-    03_Outputs/step3a_meerkat_to_check.vot — inside region, not detected
-    03_Outputs/step2b_askap_matched.vot — accepted ASKAP associations
-    01_Data/LMC_I_mosaic_ch0_beam.fits — For MeerKAT image footprint
-    01_Data/ASKAP_LMC_888MHz_image.fits — For ASKAP image footprint
+    03_Outputs/step2a_meerkat_matched.vot   catalogue cross-matches
+    03_Outputs/step3b_meerkat_visual.vot    sub-threshold recoveries
+    03_Outputs/step3a_meerkat_outside.vot   outside the mosaic
+    03_Outputs/step3a_meerkat_to_check.vot  inside it, inspected
+    03_Outputs/step2b_askap_matched.vot     accepted ASKAP associations
+    the MeerKAT and ASKAP mosaics, for the survey footprints
 
 Outputs
 -------
@@ -33,30 +30,33 @@ Paper figures (05_Figures/) — NO TITLES on any figure:
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 from astropy.table import Table, Column, vstack
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy.utils.exceptions import AstropyWarning
 import astropy.units as u
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+from _support.plot_style import apply_paper_style
+
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-BASE  = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA  = os.path.join(BASE, "01_Data")
-OUTS  = os.path.join(BASE, "03_Outputs")
-FIGS  = os.path.join(BASE, "05_Figures")
+cfg = config.load()
+OUTS  = cfg.out()
+FIGS  = cfg.fig()
 
-MEERKAT_BEAM_FILE = os.path.join(DATA, "LMC_I_mosaic_ch0_beam.fits")
-ASKAP_IMAGE_FILE = os.path.join(DATA, "ASKAP_LMC_888MHz_image.fits")
-ASKAP_MATCHED_FILE = os.path.join(OUTS, "step2b_askap_matched.vot")
+MEERKAT_BEAM_FILE = cfg.data("meerkat_mosaic")
+ASKAP_IMAGE_FILE = cfg.data("askap_image")
+ASKAP_MATCHED_FILE = cfg.out("step2b_askap_matched.vot")
 
 # Colours matched to the reference figure
 COL    = {"True":"#6baed6", "Known":"#74c476", "Likely":"#fd8d3c",
@@ -75,13 +75,8 @@ matched = Table.read(os.path.join(OUTS, "step2a_meerkat_matched.vot"), format="v
 outside = Table.read(os.path.join(OUTS, "step3a_meerkat_outside.vot"), format="votable")
 to_check = Table.read(os.path.join(OUTS, "step3a_meerkat_to_check.vot"), format="votable")
 
-visual_path = os.path.join(OUTS, "step3b_meerkat_visual.vot")
-if os.path.exists(visual_path):
-    visual = Table.read(visual_path, format="votable")
-    print(f"    step3b_meerkat_visual.vot : {len(visual)} visually confirmed")
-else:
-    visual = None
-    print(f"    step3b_meerkat_visual.vot: NOT FOUND (proceeding with cross-matched only)")
+visual = Table.read(os.path.join(OUTS, "step3b_meerkat_visual.vot"), format="votable")
+print(f"    step3b_meerkat_visual.vot : {len(visual)} visually confirmed")
 
 print(f"    step2a_meerkat_matched.vot : {len(matched)} cross-matched")
 print(f"    step3a_meerkat_outside.vot : {len(outside)} outside region")
@@ -90,45 +85,38 @@ print(f"    step3a_meerkat_to_check.vot: {len(to_check)} to check")
 askap_matched = Table.read(ASKAP_MATCHED_FILE, format="votable")
 print(f"    step2b_askap_matched.vot   : {len(askap_matched)} accepted")
 
-reid_path = os.path.join(OUTS, "step1_parent_catalogue.vot")
-if os.path.exists(reid_path):
-    reid_full = Table.read(reid_path, format="votable")
-    n_total   = len(reid_full)
-    ra_all    = np.array(reid_full["RA"],  dtype=float)
-    dec_all   = np.array(reid_full["Dec"], dtype=float)
-    cls_all   = np.array(reid_full["reid_class"], dtype=str)
-else:
-    n_total = len(matched) + len(outside) + len(to_check)
-    reid_full = None
+reid_full = Table.read(os.path.join(OUTS, "step1_parent_catalogue.vot"), format="votable")
+n_total   = len(reid_full)
+ra_all    = np.array(reid_full["RA"],  dtype=float)
+dec_all   = np.array(reid_full["Dec"], dtype=float)
+cls_all   = np.array(reid_full["reid_class"], dtype=str)
 
 # Build detected catalogue
 print("\n[2] Building final catalogues...")
 
-# Tag matched sources
-matched.add_column(Column(
-    np.full(len(matched), "cross_matched", dtype="U15"), name="detection_method"))
 
-if visual is not None and len(visual) > 0:
-    # Remove visual sources from to_check
-    vis_rpids = set(np.array(visual["RP_ID"], dtype=str))
-    check_rpids = np.array(to_check["RP_ID"], dtype=str)
-    still_undetected = np.array([rp not in vis_rpids for rp in check_rpids])
-    nondetected = to_check[still_undetected]
+vis_rpids = set(np.array(visual["RP_ID"], dtype=str))
+check_rpids = np.array(to_check["RP_ID"], dtype=str)
+nondetected = to_check[np.array([rp not in vis_rpids for rp in check_rpids])]
 
-    # Ensure detection_method exists on visual
-    if "detection_method" not in visual.colnames:
-        visual.add_column(Column(
-            np.full(len(visual), "visual", dtype="U15"), name="detection_method"))
+# The catalogue holds fluxes in Jy under one set of names, the visual
+# extraction in mJy under another.  Put the visual rows onto the catalogue's
+# names and units before stacking; taking the intersection of the two column
+# sets as they stand would quietly drop every flux column from the result.
+vis = visual.copy()
+vis["mkt_peak_flux_Jy"] = np.asarray(vis["mkt_peak_flux_mJy"], float) / 1e3
+vis["mkt_int_flux_Jy"] = np.asarray(vis["mkt_int_flux_mJy"], float) / 1e3
+vis["mkt_err_int_flux_Jy"] = np.asarray(vis["mkt_err_int_flux_mJy"], float) / 1e3
+vis["mkt_local_rms_Jy"] = np.asarray(vis["mkt_local_rms_mJy"], float) / 1e3
+vis["separation_arcsec"] = np.asarray(vis["offset_arcsec"], float)
 
-    # Find common columns for stacking
-    common_cols = [c for c in matched.colnames if c in visual.colnames]
-    detected = vstack([matched[common_cols], visual[common_cols]])
-else:
-    detected    = matched
-    nondetected = to_check
+common_cols = [c for c in matched.colnames if c in vis.colnames]
+detected = vstack([matched[common_cols], vis[common_cols]])
+detected["detection_method"] = np.concatenate([
+    np.full(len(matched), "cross_matched"), np.full(len(vis), "visual")])
 
 n_xmatch  = len(matched)
-n_visual  = len(visual) if visual is not None else 0
+n_visual  = len(visual)
 n_det     = len(detected)
 n_nondet  = len(nondetected)
 n_outside = len(outside)
@@ -229,12 +217,8 @@ cls_nd = np.array(nondetected["reid_class"], dtype=str)
 ra_out  = np.array(outside["RA"],  dtype=float)
 dec_out = np.array(outside["Dec"], dtype=float)
 
-if visual is not None and len(visual) > 0:
-    ra_v  = np.array(visual["RA"],  dtype=float)
-    dec_v = np.array(visual["Dec"], dtype=float)
-else:
-    ra_v  = np.array([], dtype=float)
-    dec_v = np.array([], dtype=float)
+ra_v  = np.array(visual["RA"],  dtype=float)
+dec_v = np.array(visual["Dec"], dtype=float)
 
 # PAPER FIGURES — no titles (captions added in Overleaf)
 print("\n[3] Generating paper figures (no titles)...")
@@ -575,7 +559,7 @@ c_r_m = SC2(ra=mkt_ra_m * u.deg, dec=mkt_dec_m * u.deg)
 dra_m, ddec_m = c_o_m.spherical_offsets_to(c_r_m)
 x_m = dra_m.to(u.arcsec).value; y_m = ddec_m.to(u.arcsec).value
 
-if visual is not None and len(visual) > 0 and "mkt_ra" in visual.colnames:
+if len(visual) > 0:
     ra_ov  = np.array(visual["RA"],      dtype=float)
     dec_ov = np.array(visual["Dec"],     dtype=float)
     mra_v  = np.array(visual["mkt_ra"],  dtype=float)
@@ -633,7 +617,7 @@ print(f"    step3c_meerkat_positional_offsets.pdf (N={len(x_all)}: {n_xmatch} XM
 
 # step3c_meerkat_snr_distribution.pdf: cross-matched and visual combined
 snr_xm = snr_m[np.isfinite(snr_m)]
-if visual is not None and len(visual) > 0 and "mkt_snr" in visual.colnames:
+if len(visual) > 0:
     snr_vi = np.array(visual["mkt_snr"], dtype=float)
     snr_vi = snr_vi[np.isfinite(snr_vi)]
 else:
@@ -730,15 +714,15 @@ from matplotlib.patches import FancyBboxPatch
 import matplotlib.gridspec as gridspec
 
 cls_match = np.array(matched["reid_class"], dtype=str)
-cls_vis   = np.array(visual["reid_class"], dtype=str) if visual is not None and len(visual) > 0 else np.array([])
+cls_vis   = np.array(visual["reid_class"], dtype=str)
 cls_nd    = np.array(nondetected["reid_class"], dtype=str)
 cls_out   = np.array(outside["reid_class"], dtype=str)
 
 class_data = []
 for cls in CLASSES + ["Unknown"]:
-    n_tot = int((cls_all == cls).sum()) if reid_full is not None else 0
+    n_tot = int((cls_all == cls).sum())
     n_xm  = int((cls_match == cls).sum())
-    n_vi  = int((cls_vis == cls).sum()) if len(cls_vis) > 0 else 0
+    n_vi  = int((cls_vis == cls).sum())
     n_d   = n_xm + n_vi
     n_n   = int((cls_nd == cls).sum())
     n_o   = int((cls_out == cls).sum())
@@ -878,14 +862,14 @@ print(f"    {'Class':<12} {'Total':>6} {'XMatch':>7} {'Visual':>7} {'Det':>5} {'
 print(f"    {'-'*62}")
 
 cls_match = np.array(matched["reid_class"], dtype=str)
-cls_vis   = np.array(visual["reid_class"], dtype=str) if visual is not None and len(visual) > 0 else np.array([])
+cls_vis   = np.array(visual["reid_class"], dtype=str)
 cls_nd    = np.array(nondetected["reid_class"], dtype=str)
 cls_out   = np.array(outside["reid_class"], dtype=str)
 
 for cls in CLASSES + ["Unknown"]:
-    n_tot = int((cls_all == cls).sum()) if reid_full is not None else 0
+    n_tot = int((cls_all == cls).sum())
     n_xm  = int((cls_match == cls).sum())
-    n_vi  = int((cls_vis == cls).sum()) if len(cls_vis) > 0 else 0
+    n_vi  = int((cls_vis == cls).sum())
     n_d   = n_xm + n_vi
     n_n   = int((cls_nd == cls).sum())
     n_o   = int((cls_out == cls).sum())

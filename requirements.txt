@@ -1,4 +1,8 @@
-numpy>=1.24
-scipy>=1.10
-astropy>=5.1
-matplotlib>=3.6
+# Pinned to the versions the published run used (Python 3.10.20).
+# Newer versions work; these are what the numbers in results/summary.md
+# were produced with.
+numpy==1.24.3
+scipy==1.10.1
+astropy==5.2.2
+matplotlib==3.7.2
+PyYAML==6.0.3

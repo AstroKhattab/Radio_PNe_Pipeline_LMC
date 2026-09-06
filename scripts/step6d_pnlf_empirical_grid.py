@@ -16,11 +16,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyWarning
 from scipy.optimize import differential_evolution, curve_fit
 from scipy.stats import t as student_t, skewnorm
-warnings.filterwarnings("ignore"); np.random.seed(42)
 
-BASE=os.environ.get("PNBASE", os.path.expanduser("~/Desktop/Research/PN LMC Paper"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+
+warnings.simplefilter("ignore", AstropyWarning)
+cfg = config.load()
 
 # Same sample switch as step6a, so the grid can be produced for the full
 # sample or for the Radio_High sources with identical code.
@@ -29,10 +33,14 @@ if "--sample" in sys.argv: SAMPLE=sys.argv[sys.argv.index("--sample")+1]
 if SAMPLE not in ("full","high"): raise SystemExit("--sample must be 'full' or 'high'")
 STEP="step6d" if SAMPLE=="full" else "step6h"
 SRC ="step6a_pnlf.vot" if SAMPLE=="full" else "step6g_pnlf_high.vot"
-T=Table.read(os.path.join(BASE,"03_Outputs",SRC),format="votable")
+T=Table.read(cfg.out(SRC),format="votable")
 print(f"grid for the {SAMPLE} sample: {len(T)} rows from {SRC}")
 _SLBL = "" if SAMPLE=="full" else "  —  high-confidence sample"
-L_REF=1e20; BIN_W=0.3; M_LIM=-0.5; M_CEIL=-4.52
+L_REF=cfg["pnlf"]["reference_luminosity_cgs"]; BIN_W=cfg["pnlf"]["bin_width_mag"]
+M_LIM=cfg["pnlf"]["completeness_limit_mag"]; M_CEIL=cfg.ceiling_magnitude()
+CIAR_ALPHA=cfg["pnlf"]["ciardullo_alpha"]; CIAR_BETA=cfg["pnlf"]["ciardullo_beta"]
+SEED=cfg["pnlf"]["fit_seed"]
+np.random.seed(SEED)
 
 log_lum=np.array(T["log_radio_lum"],dtype=float); valid=np.isfinite(log_lum)
 M_all=-2.5*(log_lum[valid]-np.log10(L_REF))
@@ -62,7 +70,7 @@ def f_schechter(m,phi,ms,al):
 def f_ciar_free(m,N0,Ms,al,be):
     v=N0*np.exp(al*(m-Ms))*(1-np.exp(be*(Ms-m))); return np.where(m>Ms,np.maximum(v,1e-4),1e-4)
 def f_ciar_canonical(m,N0,Ms):
-    v=N0*np.exp(0.307*(m-Ms))*(1-np.exp(3.0*(Ms-m))); return np.where(m>Ms,np.maximum(v,1e-4),1e-4)
+    v=N0*np.exp(CIAR_ALPHA*(m-Ms))*(1-np.exp(CIAR_BETA*(Ms-m))); return np.where(m>Ms,np.maximum(v,1e-4),1e-4)
 
 defs=[("Gaussian",f_gaussian,[0,mx_f.min()-3,0.1],[my_f.max()*4,mx_f.max()+2,8.0]),
  ("Student-$t$",f_studentt,[0,mx_f.min()-3,0.1,0.5],[my_f.max()*3,mx_f.max()+2,10,200]),
@@ -78,7 +86,7 @@ defs=[("Gaussian",f_gaussian,[0,mx_f.min()-3,0.1],[my_f.max()*4,mx_f.max()+2,8.0
 res={}
 for nm,fn,lb,ub in defs:
     r=lambda p: np.sum(((my_f-fn(mx_f,*p))/mye_f)**2)
-    de=differential_evolution(r,bounds=list(zip(lb,ub)),seed=42,maxiter=12000,tol=1e-13,popsize=40,mutation=(0.3,1.9))
+    de=differential_evolution(r,bounds=list(zip(lb,ub)),seed=SEED,maxiter=12000,tol=1e-13,popsize=40,mutation=(0.3,1.9))
     popt,_=curve_fit(fn,mx_f,my_f,p0=de.x,bounds=(lb,ub),sigma=mye_f,absolute_sigma=True,maxfev=300000)
     yf=fn(mx_f,*popt); k=len(popt)
     chi2=np.sum(((my_f-yf)/mye_f)**2)
@@ -99,7 +107,7 @@ def panel(ax,nm,r,rank,small=False):
     ax.tick_params(labelsize=6.6 if small else 8.4)
     for s in ("top","right"): ax.spines[s].set_visible(False)
 
-FIG=os.path.join(BASE,"05_Figures")
+FIG=cfg.fig()
 # --- 10-up single page ---
 fig,axes=plt.subplots(2,5,figsize=(13.6,5.3),sharex=True,sharey=True)
 for i,(nm,r) in enumerate(ranked):

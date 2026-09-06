@@ -1,13 +1,18 @@
 """
 step3b2_reextract_visual.py
 
-Re-extract MeerKAT fluxes for the 32 visually confirmed PNe of step03b.
+Independent check on the step 3b photometry, with a wide aperture.
 
-step03b summed the pixels inside a 4 arcsec radius but divided by the full
-Gaussian beam solid angle, so its integrated fluxes are low by about a factor
-of two.  This script repeats the measurement in a 2 x FWHM aperture with a
-local background subtracted, and reports the old and old-corrected values
-alongside the new one so the change can be audited.
+Step 3b measures the sub-threshold sources in an aperture of one beam
+half-width and divides by the fraction of a point source that aperture
+encloses, which is the method the paper describes.  This script repeats the
+measurement in a 2 x FWHM aperture with a local background subtracted, where
+no enclosed-flux correction is needed at all, and reports both so the
+correction can be checked against a measurement that does not use it.
+
+Nothing downstream reads this file.  The wide aperture is noise dominated at
+these flux levels -- most of these sources are detected between 2 and 6 sigma
+-- which is why the narrow, corrected aperture is the one the analysis uses.
 
 Inputs
 ------
@@ -25,7 +30,7 @@ step3b_extract_meerkat_visual.py is left untouched.
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -45,46 +50,32 @@ import astropy.units as u
 warnings.filterwarnings("ignore")
 apply_paper_style()
 
-# Same 32 sources as step03b, in the same order.
-VISUAL_IDS = [
-    "RP607",  "RP650",  "RP652",  "RP656",
-    "RP980",  "RP1114", "RP1234",
-    "RP1324", "RP1352", "RP1557", "RP1606", "RP1608",
-    "RP1634", "RP1636", "RP1684", "RP1687", "RP1695",
-    "RP2278", "RP2294", "RP2297", "RP2304",
-    "RP2311", "RP2312", "RP2326", "RP2708", "RP3449",
-    "RP3464", "RP3661", "RP4065", "RP4081",
-    "RP4176", "RP4285",
-]
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-# Per-source peak-search radius overrides (arcsec); 0 means measure at the
-# Reid position without searching for a peak.
-OVERRIDES = {
-    "RP1114": 0.0,   # bright extended source nearby
-    "RP2708": 0.0,   # peak search grabbed the wrong source
-}
+cfg = config.load()
+ENTRIES = cfg.visual_ids()
+VISUAL_IDS = [rp for rp, _ in ENTRIES]
+OVERRIDES = {rp: radius for rp, radius in ENTRIES if radius is not None}
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA = os.path.join(BASE, "01_Data")
-OUTS = os.path.join(BASE, "03_Outputs")
-PNGD = os.path.join(BASE, "05_Figures", "step3b2_visual_photometry_cutouts")
+PNGD = cfg.inspect("figures/step3b2_visual_photometry_cutouts")
 
-BEAM_FILE = os.path.join(DATA, "LMC_I_mosaic_ch0_beam.fits")
-RMS_FILE  = os.path.join(DATA, "LMC_I_mosaic_ch0_rms.fits")
-TO_CHECK  = os.path.join(OUTS, "step3a_meerkat_to_check.vot")
-OUT_VOT   = os.path.join(OUTS, "step3b2_meerkat_visual_reextracted.vot")
+BEAM_FILE = cfg.data("meerkat_mosaic")
+RMS_FILE  = cfg.data("meerkat_rms")
+TO_CHECK  = cfg.out("step3a_meerkat_to_check.vot")
+OUT_VOT   = cfg.out("step3b2_meerkat_visual_reextracted.vot")
 
-SEARCH_RAD   = 6.0    # arcsec, peak search radius around the optical position
-BEAM_FWHM    = 8.0    # arcsec, MeerKAT restoring beam (BMAJ = BMIN = 8")
-APER_RAD     = 16.0   # arcsec, 2 x FWHM; encloses essentially all of a point source
-BKG_ANN_IN   = 24.0   # arcsec, starts clear of the aperture
+SEARCH_RAD   = cfg["visual"]["search_arcsec"]
+BEAM_FWHM    = cfg["meerkat"]["beam_fwhm_arcsec"]
+APER_RAD     = 2.0 * BEAM_FWHM   # the wide check aperture; 2 x FWHM
+BKG_ANN_IN   = 24.0   # arcsec, starts clear of the wide aperture
 BKG_ANN_OUT  = 48.0   # arcsec, wide enough for a stable median, still local
-OLD_BEAM_RAD = 4.0    # arcsec, the half-beam radius step03b used
+NARROW_RAD   = cfg["visual"]["aperture_arcsec"]   # the aperture step 3b uses
 FLUX_SCALE_ERR = 0.05 # fractional flux-scale term added in quadrature
 CUTOUT_SIZE  = 90.0   # arcsec, side of the inspection PNG
 PHOT_BOX     = 2.4 * BKG_ANN_OUT  # arcsec, must comfortably contain the annulus
 
-print("step3b2_reextract_visual_photometry.py")
+print("step3b2: wide-aperture check on the step 3b photometry")
 print("Visual IDs: %d" % len(VISUAL_IDS))
 
 os.makedirs(PNGD, exist_ok=True)
@@ -128,14 +119,14 @@ def enclosed_fraction(radius):
     return 1.0 - np.exp(-4.0 * np.log(2) * radius**2 / BEAM_FWHM**2)
 
 f_new = enclosed_fraction(APER_RAD)
-f_old = enclosed_fraction(OLD_BEAM_RAD)
+f_narrow = enclosed_fraction(NARROW_RAD)
 
 print("Pixel scale     : %.4f arcsec/pix" % pscale)
 print("Beam area       : %.2f pix" % beam_area_pix)
 print("Aperture r=%.1f\" : %.2f pix, %.2f beams, encloses %.4f of a point source"
       % (APER_RAD, aper_area_pix, n_beams_aper, f_new))
-print("Old r=%.1f\"      : encloses %.4f, i.e. step03b fluxes are low by %.3fx"
-      % (OLD_BEAM_RAD, f_old, 1.0 / f_old))
+print("Narrow r=%.1f\"   : encloses %.4f, so step 3b divides its aperture sum by that"
+      % (NARROW_RAD, f_narrow))
 
 ras_opt  = np.array(visual["RA"],  dtype=float)
 decs_opt = np.array(visual["Dec"], dtype=float)
@@ -143,8 +134,8 @@ decs_opt = np.array(visual["Dec"], dtype=float)
 col_peak     = np.full(n_vis, np.nan)
 col_int_new  = np.full(n_vis, np.nan)
 col_err_new  = np.full(n_vis, np.nan)
-col_int_old  = np.full(n_vis, np.nan)
-col_int_oldc = np.full(n_vis, np.nan)
+col_int_narrow  = np.full(n_vis, np.nan)
+col_int_narrow_c = np.full(n_vis, np.nan)
 col_bkg      = np.full(n_vis, np.nan)
 col_rms      = np.full(n_vis, np.nan)
 col_snr      = np.full(n_vis, np.nan)
@@ -232,12 +223,13 @@ for k in range(n_vis):
         aper_sum = float(np.sum(rd[aper])) - float(bkg_med) * n_aper
         col_int_new[k] = aper_sum / beam_area_pix * 1000.0
 
-        # step03b: sum inside r = FWHM/2, no background, divided by the full
-        # beam area.  Reproduced here only for comparison.
-        old_mask = (dist_pk <= OLD_BEAM_RAD) & np.isfinite(rd)
-        if np.any(old_mask):
-            col_int_old[k] = float(np.sum(rd[old_mask])) / beam_area_pix * 1000.0
-            col_int_oldc[k] = col_int_old[k] / f_old
+        # The step 3b measurement, reproduced here for comparison: sum inside
+        # r = FWHM/2, no background, divided by the beam area and then by the
+        # enclosed fraction.
+        narrow_mask = (dist_pk <= NARROW_RAD) & np.isfinite(rd)
+        if np.any(narrow_mask):
+            col_int_narrow[k] = float(np.sum(rd[narrow_mask])) / beam_area_pix * 1000.0
+            col_int_narrow_c[k] = col_int_narrow[k] / f_narrow
 
         ann_rms = nd[(dist_pk >= BKG_ANN_IN) & (dist_pk <= BKG_ANN_OUT) & np.isfinite(nd)]
         if ann_rms.size > 0:
@@ -257,10 +249,10 @@ for k in range(n_vis):
         if col_flag[k] == "":
             col_flag[k] = "extracted"
 
-        ratio = col_int_new[k] / col_int_old[k] if col_int_old[k] else np.nan
-        print("  %-10s peak=%8.4f  new=%8.4f +/- %6.4f  old=%8.4f  new/old=%5.2f  "
+        ratio = col_int_new[k] / col_int_narrow[k] if col_int_narrow[k] else np.nan
+        print("  %-10s peak=%8.4f  wide=%8.4f +/- %6.4f  narrow=%8.4f  wide/narrow=%5.2f  "
               "bkg=%+8.5f  SNR=%6.1f  off=%4.2f\"  [%s]"
-              % (rpid, col_peak[k], col_int_new[k], col_err_new[k], col_int_old[k],
+              % (rpid, col_peak[k], col_int_new[k], col_err_new[k], col_int_narrow[k],
                  ratio, col_bkg[k], col_snr[k], col_offset[k], col_flag[k]))
 
         # Inspection cutout.
@@ -332,8 +324,8 @@ out.add_column(Column(col_rms.astype("f4"),        name="mkt_local_rms_mJy"))
 out.add_column(Column(col_snr.astype("f4"),        name="mkt_snr"))
 out.add_column(Column(col_int_new.astype("f4"),    name="mkt_int_flux_mJy_new"))
 out.add_column(Column(col_err_new.astype("f4"),    name="mkt_err_int_flux_mJy_new"))
-out.add_column(Column(col_int_old.astype("f4"),    name="mkt_int_flux_mJy_old_buggy"))
-out.add_column(Column(col_int_oldc.astype("f4"),   name="mkt_int_flux_mJy_old_corrected"))
+out.add_column(Column(col_int_narrow.astype("f4"),    name="mkt_int_flux_mJy_narrow_raw"))
+out.add_column(Column(col_int_narrow_c.astype("f4"),   name="mkt_int_flux_mJy_narrow_corrected"))
 out.add_column(Column(col_bkg.astype("f4"),        name="bkg_median_mJy"))
 out.add_column(Column(np.full(n_vis, APER_RAD, dtype="f4"), name="aperture_radius_arcsec"))
 out.add_column(Column(np.full(n_vis, n_beams_aper, dtype="f4"), name="n_beams_in_aperture"))
@@ -345,24 +337,24 @@ for name, unit in (("mkt_peak_flux_mJy", "mJy/beam"),
                    ("bkg_median_mJy", "mJy/beam"),
                    ("mkt_int_flux_mJy_new", "mJy"),
                    ("mkt_err_int_flux_mJy_new", "mJy"),
-                   ("mkt_int_flux_mJy_old_buggy", "mJy"),
-                   ("mkt_int_flux_mJy_old_corrected", "mJy"),
+                   ("mkt_int_flux_mJy_narrow_raw", "mJy"),
+                   ("mkt_int_flux_mJy_narrow_corrected", "mJy"),
                    ("offset_arcsec", "arcsec"),
                    ("aperture_radius_arcsec", "arcsec")):
     out[name].unit = unit
 
 out["bkg_median_mJy"].description = "sigma-clipped median pixel value in the background annulus"
-out["mkt_int_flux_mJy_old_buggy"].description = "step03b value: r=4\" sum, no background, full beam area"
-out["mkt_int_flux_mJy_old_corrected"].description = "old value divided by the 0.5 enclosed fraction at r=FWHM/2"
+out["mkt_int_flux_mJy_narrow_raw"].description = "raw narrow-aperture sum, no background, no enclosed-flux correction"
+out["mkt_int_flux_mJy_narrow_corrected"].description = "the step 3b value: narrow aperture divided by its enclosed fraction"
 
 out.write(OUT_VOT, format="votable", overwrite=True)
 print("  -> %s  (%d rows)" % (OUT_VOT, n_vis))
 
 ok = col_flag == "extracted"
-ratios = np.where((col_int_old != 0) & ok, col_int_new / col_int_old, np.nan)
+ratios = np.where((col_int_narrow != 0) & ok, col_int_new / col_int_narrow, np.nan)
 print("\nExtracted: %d / %d" % (int(np.sum(ok)), n_vis))
 if np.any(np.isfinite(ratios)):
-    print("new/old ratio  median %.3f   min %.3f   max %.3f"
+    print("wide/narrow ratio  median %.3f   min %.3f   max %.3f"
           % (np.nanmedian(ratios), np.nanmin(ratios), np.nanmax(ratios)))
     print("sources with ratio > 3 or < 1/3: %d"
           % int(np.sum((ratios > 3.0) | (ratios < 1.0 / 3.0))))

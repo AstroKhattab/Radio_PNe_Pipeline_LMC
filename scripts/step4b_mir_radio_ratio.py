@@ -36,32 +36,36 @@ O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
 import os
+import sys
 import warnings
 
 import matplotlib
 import numpy as np
 from astropy.table import Column, Table
+from astropy.utils.exceptions import AstropyWarning
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 from _support.plot_style import apply_paper_style
 
-warnings.filterwarnings("ignore")
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-BASE = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-OUTS = os.path.join(BASE, "03_Outputs")
-FIGS = os.path.join(BASE, "05_Figures")
+cfg = config.load()
+INPUT_FILE = cfg.out("step4a_spectral_index.vot")
+OUT_VOT = cfg.out("step4b_mir_radio_ratio.vot")
+OUT_SUMMARY = cfg.out("step4b_mir_summary.csv")
+FIG_RATIO = cfg.fig("step4b_mir_radio_ratio.pdf")
 
-INPUT_FILE = os.path.join(OUTS, "step4a_spectral_index.vot")
-OUT_VOT = os.path.join(OUTS, "step4b_mir_radio_ratio.vot")
-FIG_RATIO = os.path.join(FIGS, "step4b_mir_radio_ratio.pdf")
-
-ZP_8UM_JY = 64.13
-COHEN_PN_MEDIAN = 4.7
-PN_SCREEN_LOW = 0.5
-PN_SCREEN_HIGH = 10.0
-HII_LIKE_LOW = 20.0
+ZP_8UM_JY = cfg["mir_radio"]["irac8_zero_point_jy"]
+COHEN_PN_MEDIAN = cfg["mir_radio"]["cohen_pn_median"]
+PN_SCREEN_LOW, PN_SCREEN_HIGH = cfg["mir_radio"]["pn_band"]
+HII_LIKE_LOW = cfg["mir_radio"]["hii_above"]
+ASKAP_FREQ_MHZ = cfg["askap"]["frequency_mhz"]
+MEERKAT_FREQ_MHZ = cfg["meerkat"]["frequency_ghz"] * 1000.0
 
 
 def numeric(table, column):
@@ -98,9 +102,6 @@ def diagnostic_class(ratios):
     labels[valid & (ratios >= HII_LIKE_LOW)] = "HII_like"
     return labels
 
-
-os.makedirs(OUTS, exist_ok=True)
-os.makedirs(FIGS, exist_ok=True)
 
 print("step4b: mid-infrared to radio ratio diagnostic")
 
@@ -144,8 +145,8 @@ radio_frequency_mhz = np.full(n_sources, np.nan)
 radio_survey = np.full(n_sources, "none", dtype="U24")
 
 for ratio, error, frequency, label in [
-    (ratio_askap, ratio_askap_error, 888.0, "ASKAP"),
-    (ratio_central, ratio_central_error, 1295.0, "MeerKAT_broadband"),
+    (ratio_askap, ratio_askap_error, ASKAP_FREQ_MHZ, "ASKAP"),
+    (ratio_central, ratio_central_error, MEERKAT_FREQ_MHZ, "MeerKAT_broadband"),
 ]:
     use = ~np.isfinite(ratio_near1) & np.isfinite(ratio)
     ratio_near1[use] = ratio[use]
@@ -193,6 +194,23 @@ detected.add_column(Column(ratio_near1.astype("f4"), name="cohen_ratio"))
 
 detected.write(OUT_VOT, format="votable", overwrite=True)
 print(f"    {OUT_VOT}")
+
+sp_class = np.array([str(x).strip() for x in detected["sp_class"]])
+rows = [("all", int(np.isfinite(ratio_near1).sum()),
+         float(np.nanmedian(ratio_near1)))]
+for label in ("thermal", "uncertain", "steep", "no_reliable_alpha"):
+    sel = np.isfinite(ratio_near1) & (sp_class == label)
+    rows.append((label, int(sel.sum()),
+                 float(np.median(ratio_near1[sel])) if sel.any() else np.nan))
+rows.append(("reliable_index_and_ratio",
+             int((np.isfinite(ratio_near1) & np.isin(
+                 sp_class, ["thermal", "uncertain", "steep"])).sum()), np.nan))
+summary = Table(rows=rows, names=("subset", "N", "median_ratio"))
+summary.write(OUT_SUMMARY, format="ascii.csv", overwrite=True)
+print("\n    median ratio by spectral class:")
+for name, count, median in rows:
+    print(f"      {name:<26} N={count:>4}  median={median:.2f}"
+          if np.isfinite(median) else f"      {name:<26} N={count:>4}")
 
 print("\n[5] Generating the two-frequency comparison figure...")
 # The 996.646 MHz sub-band panel has been removed; see the module docstring.

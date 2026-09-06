@@ -62,28 +62,28 @@ Authors : Omar K. Khattab, M. D. Filipovic
 Group   : Filipovic Group, Western Sydney University
 """
 
-import os, warnings
+import os, sys
 import numpy as np
 from astropy.table import Table, Column
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-BASE        = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA        = os.path.join(BASE, "01_Data")
-OUTS        = os.path.join(BASE, "03_Outputs")
-HASH_FILE   = os.path.join(DATA, "HASH_V163_full.vot")
-WARREN_FILE = os.path.join(DATA, "Warren_PNE_673.vot")
-REID_FILE   = os.path.join(DATA, "reid2014_photometry.vot")
-OUT_FILE    = os.path.join(OUTS, "step1_parent_catalogue.vot")
-NONPN_FILE  = os.path.join(OUTS, "step1_lmc_nonpn.vot")
-SAMPLE_CSV  = os.path.join(OUTS, "step1_catalogue_excerpt.csv")
-SAMPLE_TEX  = os.path.join(OUTS, "step1_catalogue_excerpt.tex")
-N_EXCERPT   = 10   # rows shown in the published excerpt
+cfg = config.load()
+HASH_FILE   = cfg.data("hash_catalogue")
+WARREN_FILE = cfg.data("reid_positions")
+REID_FILE   = cfg.data("reid_photometry")
+OUT_FILE    = cfg.out("step1_parent_catalogue.vot")
+NONPN_FILE  = cfg.out("step1_lmc_nonpn.vot")
+SAMPLE_CSV  = cfg.out("step1_catalogue_excerpt.csv")
+SAMPLE_TEX  = cfg.table("step1_catalogue_excerpt.tex")
+N_EXCERPT   = cfg["parent"]["excerpt_rows"]
 
-PN_STATUS   = ("T", "P")   # HASH: true PN, probable PN
-MATCH_RAD   = 4.5          # arcsec — same acceptance radius as the radio matching
+DOMAIN      = cfg["parent"]["domain"]
+PN_STATUS   = tuple(cfg["parent"]["pn_status"])
+MATCH_RAD   = cfg["parent"]["ancillary_match_arcsec"]
 
 # PNstat -> reid_class, for the HASH sources that Warren never listed.
 STATUS_TO_CLASS = {"T": "True", "P": "Possible"}
@@ -100,7 +100,7 @@ STATUS_LABELS = {
 }
 
 print("=" * 56)
-print("  step1_build_reid.py")
+print("  step1_parent_catalogue.py")
 print("=" * 56)
 
 
@@ -120,13 +120,13 @@ print(f"    reid2014_photometry : {len(reid14)} sources")
 
 # ── Select the parent sample ─────────────────────────────────────────────────
 print("\n[2] Selecting the LMC PN parent sample from HASH...")
-lmc    = hash_all[clean(hash_all["Domain"]) == "LMC"]
+lmc    = hash_all[clean(hash_all["Domain"]) == DOMAIN]
 pnstat = clean(lmc["PNstat"])
 is_pn  = np.isin(pnstat, PN_STATUS)
 parent = lmc[is_pn]
 nonpn  = lmc[~is_pn]
 
-print(f"    LMC domain              : {len(lmc)}")
+print(f"    {DOMAIN} domain              : {len(lmc)}")
 print(f"    PNstat T (true PN)      : {int(np.sum(pnstat == 'T'))}")
 print(f"    PNstat P (probable PN)  : {int(np.sum(pnstat == 'P'))}")
 print(f"    Parent sample           : {len(parent)}")
@@ -163,9 +163,10 @@ cls[hit_w]   = clean(warren["OBJECT_PROBABILITY"])[war_rows[idx_w[hit_w]]]
 # map the class from PNstat so that the downstream class-based summaries still
 # have something meaningful to report.
 hash_ids = np.asarray(parent["HASH"], dtype=int)
+pnstat_parent = pnstat[is_pn]
 for i in np.where(~hit_w)[0]:
     rp_id[i] = f"HASH{hash_ids[i]}"
-    cls[i]   = STATUS_TO_CLASS.get(pnstat[is_pn][i], "Unknown")
+    cls[i]   = STATUS_TO_CLASS.get(pnstat_parent[i], "Unknown")
 
 print(f"    With a Reid & Parker RP number : {int(hit_w.sum())}")
 print(f"    HASH-only (class from PNstat)  : {int((~hit_w).sum())}")
@@ -185,6 +186,8 @@ hit_r = sep_r.arcsec <= MATCH_RAD
 src_r = np.full(n_parent, -1, dtype=int)
 src_r[hit_r] = r14_rows[idx_r[hit_r]]
 print(f"    With reid2014 photometry : {int(hit_r.sum())}")
+assert len(set(src_r[hit_r])) == int(hit_r.sum()), \
+    "one reid2014 photometry row matched to two parent sources"
 
 SKIP = {"recno", "Name", "_RA", "_DE", "SimbadName"}
 PHOT_COLS = [c for c in reid14.colnames if c not in SKIP]
@@ -194,19 +197,14 @@ def phot_column(name):
     """Pull one reid2014 column onto the parent rows, NaN/blank where absent."""
     src = reid14[name]
     if src.dtype.kind in ("f", "i"):
+        values = np.ma.asarray(src, dtype=float).filled(np.nan)
         out = np.full(n_parent, np.nan)
-        for i in np.where(hit_r)[0]:
-            try:
-                out[i] = float(src[src_r[i]])
-            except Exception:
-                pass
+        out[hit_r] = values[src_r[hit_r]]
         return Column(out, name=name)
+    # VizieR writes the photometry-origin flags as strings; blanks stay blank.
+    values = np.array([str(x).strip() for x in src], dtype="U10")
     out = np.full(n_parent, "", dtype="U10")
-    for i in np.where(hit_r)[0]:
-        try:
-            out[i] = str(src[src_r[i]])
-        except Exception:
-            pass
+    out[hit_r] = values[src_r[hit_r]]
     return Column(out, name=name)
 
 
@@ -240,7 +238,7 @@ for c in PHOT_COLS:
 maj = np.asarray(parent["MajDiam"], dtype=float)
 maj[~np.isfinite(maj)] = np.nan
 out.add_column(Column(hash_ids.astype(np.int32),                name="hash_id"))
-out.add_column(Column(pnstat[is_pn].astype("U4"),               name="hash_pnstat"))
+out.add_column(Column(pnstat_parent.astype("U4"),                name="hash_pnstat"))
 out.add_column(Column(clean(parent["Name"]).astype("U32"),      name="hash_name"))
 out.add_column(Column(clean(parent["Catalogue"]).astype("U24"), name="hash_catalogue"))
 out.add_column(Column(maj, name="opt_majdiam", unit="arcsec"))
@@ -251,7 +249,6 @@ for c in ["True", "Known", "Likely", "Possible", "Unknown"]:
     print(f"      {c:<10}: {int(np.sum(np.asarray(out['reid_class']) == c))}")
 
 # ── Save ─────────────────────────────────────────────────────────────────────
-os.makedirs(OUTS, exist_ok=True)
 out.write(OUT_FILE, format="votable", overwrite=True)
 
 rejected = Table()

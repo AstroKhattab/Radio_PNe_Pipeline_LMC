@@ -1,117 +1,193 @@
-"""Compare the radio PNLF under three masking/sample choices.
+"""Compare the radio PNLF under three masking choices.
 
-Panels: the full sample unmasked, the full sample with the published
-bright-bin and faint-cut mask, and the high-confidence sample unmasked.
+Why this figure exists.  The bright end of the luminosity function is where
+the contamination lives, and how it is handled decides M*.  Three treatments
+are shown side by side on the same sample:
 
-Input   03_Outputs/step6a_pnlf.vot, 03_Outputs/step5b_spectral_index_recut.vot
+    A   no mask at all
+    B   a hand-chosen bright-bin mask, the approach used before
+    C   the physical flux ceiling of Step 4c, the approach adopted here
+
+Panel B is the point of the figure.  Choosing which bright bins to drop by eye
+lets the fit be anchored by whichever contaminant happens to survive the cut,
+and the resulting M* is an artefact of that choice.  The ceiling is derived
+from NGC 7027 at the LMC distance and does not depend on looking at the data.
+
+Bars are coloured by spectral class so the steep-spectrum sources -- the
+likely background galaxies -- are visible where they sit.
+
+Input   03_Outputs/step6a_pnlf.vot
+        03_Outputs/step5d_criteria_tally.vot
 Output  05_Figures/step6e_pnlf_mask_vs_clean.pdf
 
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
-import warnings, numpy as np, os; warnings.filterwarnings('ignore')
-import matplotlib; matplotlib.use("Agg")
+import os
+import sys
+import warnings
+
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyWarning
 from scipy.optimize import differential_evolution, curve_fit
+
+warnings.simplefilter("ignore", AstropyWarning)
 np.random.seed(42)
-B=os.environ.get("PNBASE",".")
-t=Table.read(f'{B}/03_Outputs/step6a_pnlf.vot',format='votable')
-c=Table.read(f'{B}/03_Outputs/step5b_spectral_index_recut.vot',format='votable')
-M=np.array(t['M_radio'],dtype=float); idt=np.array([str(x) for x in t['RP_ID']])
-idc={str(k):i for i,k in enumerate(c['RP_ID'])}
-J=np.array([idc.get(k,-1) for k in idt])
-oc=np.array([str(c['our_classification'][j]) if j>=0 else '?' for j in J])
-sp=np.array([str(c['sp_class_recut'][j]) if j>=0 else '?' for j in J])
-fin=np.isfinite(M); clean=fin&np.isin(oc,['High-confidence PN','Probable PN'])
-BIN=.3; MLIM=-.5; ALO,AHI=-4.4,-3.7
 
-def cc(m,N,Ms):
-    v=N*np.exp(0.307*(m-Ms))*(1-np.exp(3.0*(Ms-m))); return np.where(m>Ms,np.maximum(v,1e-4),1e-4)
-def gau(m,A,mu,s): return A*np.exp(-0.5*((m-mu)/s)**2)
-def bins(sel):
-    m=M[sel]; e=np.arange(np.floor(m.min()/BIN)*BIN,np.ceil(m.max()/BIN)*BIN+BIN,BIN)
-    cn,_=np.histogram(m,bins=e); ct=.5*(e[:-1]+e[1:]); nz=cn>0
-    return ct[nz],cn[nz].astype(float),e
-def fit(fn,mx,my,lb,ub):
-    ye=np.sqrt(my); ye[ye==0]=1
-    r=lambda p: np.sum(((my-fn(mx,*p))/ye)**2)
-    de=differential_evolution(r,bounds=list(zip(lb,ub)),seed=42,maxiter=9000,tol=1e-12,popsize=35)
-    po,_=curve_fit(fn,mx,my,p0=de.x,bounds=(lb,ub),sigma=ye,absolute_sigma=True,maxfev=200000)
-    yf=fn(mx,*po); k=len(po); ch=np.sum(((my-yf)/ye)**2)
-    return po, ch+2*k, ch/(len(my)-k)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-fig,axes=plt.subplots(1,3,figsize=(14.2,4.5),sharey=True)
-COL={'thermal':'#1f6fb4','uncertain':'#e59a1e','steep':'#c0392b','no_fit':'0.72'}
+cfg = config.load()
+t = Table.read(cfg.out("step6a_pnlf.vot"), format="votable")
+c = Table.read(cfg.out("step5d_criteria_tally.vot"), format="votable")
 
-# panel A: all sources, unmasked
-ax=axes[0]; mx,my,e=bins(fin); keep=mx<=MLIM
-bot=np.zeros(len(mx))
-for s in ['thermal','uncertain','no_fit','steep']:
-    h,_=np.histogram(M[fin&(sp==s)],bins=e); h=h[np.histogram(M[fin],bins=e)[0]>0]
-    ax.bar(mx,h,bottom=bot,width=BIN*0.92,color=COL[s],lw=0,label=s.replace('_',' '))
-    bot+=h
-po,aic,rc=fit(cc,mx[keep],my[keep],[0,np.nanmin(M)-5],[1e6,M[fin].min()-0.05])
-g=np.linspace(po[1]+.01,MLIM,500); ax.plot(g,cc(g,*po),'k-',lw=2)
-ax.axvline(MLIM,ls=':',color='.4'); ax.set_yscale('log'); ax.set_ylim(.5,140)
-# ax.set_title("A.  All 220, no mask\nCiardullo canonical: $\\Delta$AIC = 22.7  (rank 9/10)",fontsize=10)
-# changed 2026-08-30: the AIC and the rank were frozen strings that a refit could not update;
-# the title is now filled in after the three fits (see set_title call below).  The rank was
-# dropped because this script fits one model per panel and cannot rank ten of them.
-title_A = ax.set_title("",fontsize=10)
-ax.set_ylabel("$N$ per 0.3 mag bin"); ax.legend(fontsize=7.5,frameon=False,loc='upper left')
-ax.annotate("brightest source\nis steep-spectrum",xy=(-4.9,1.1),xytext=(-4.7,14),fontsize=7.8,
-            color='#c0392b',arrowprops=dict(arrowstyle='->',color='#c0392b',lw=1))
+M = np.array(t["M_radio"], dtype=float)
+idt = np.array([str(x) for x in t["RP_ID"]])
+idc = {str(k): i for i, k in enumerate(c["RP_ID"])}
+J = np.array([idc.get(k, -1) for k in idt])
+sp = np.array([str(c["sp_class"][j]) if j >= 0 else "no_fit" for j in J])
+sp[~np.isin(sp, ["thermal", "uncertain", "steep"])] = "no_fit"
 
-# panel B: all sources, published mask
-ax=axes[1]; keep2=(mx<=MLIM)&~((mx>ALO)&(mx<AHI))
-bot=np.zeros(len(mx))
-for s in ['thermal','uncertain','no_fit','steep']:
-    h,_=np.histogram(M[fin&(sp==s)],bins=e); h=h[np.histogram(M[fin],bins=e)[0]>0]
-    ax.bar(mx,h,bottom=bot,width=BIN*0.92,color=COL[s],lw=0,alpha=.35); bot+=h
-bot=np.zeros(int(keep2.sum()))
-for s in ['thermal','uncertain','no_fit','steep']:
-    h,_=np.histogram(M[fin&(sp==s)],bins=e); h=h[np.histogram(M[fin],bins=e)[0]>0]
-    ax.bar(mx[keep2],h[keep2],bottom=bot,width=BIN*0.92,color=COL[s],lw=0); bot+=h[keep2]
-po2,aic2,rc2=fit(cc,mx[keep2],my[keep2],[0,np.nanmin(M)-5],[1e6,M[fin].min()-0.05])
-g=np.linspace(po2[1]+.01,MLIM,500); ax.plot(g,cc(g,*po2),'k-',lw=2)
-ax.axvspan(ALO,AHI,color='k',alpha=.07)
-ax.axvline(MLIM,ls=':',color='.4'); ax.set_yscale('log')
-ax.set_title(f"B.  All 220, bright bins masked (published)\n$M^*$ = {po2[1]:.3f}  —  anchored by an AGN",fontsize=10)
-# added 2026-08-30: the ghosted bars reach N ~ 100 with nothing saying they are masked
-ax.legend(handles=[Patch(facecolor="0.55",alpha=.35,
-                         label="Masked bins (plotted, not fitted)")],
-          fontsize=7.5,frameon=False,loc="upper left")
-ax.set_xlabel("$M_{\\rm radio}$ / mag")
+fin = np.isfinite(M)
+N_TOT = int(fin.sum())
 
-# panel C: clean sample, unmasked
-ax=axes[2]; mxc,myc,ec=bins(clean); keepc=mxc<=MLIM
-bot=np.zeros(len(mxc))
-for s in ['thermal','uncertain','no_fit','steep']:
-    h,_=np.histogram(M[clean&(sp==s)],bins=ec); h=h[np.histogram(M[clean],bins=ec)[0]>0]
-    ax.bar(mxc,h,bottom=bot,width=BIN*0.92,color=COL[s],lw=0); bot+=h
-poc,aicc,rcc=fit(cc,mxc[keepc],myc[keepc],[0,np.nanmin(M)-5],[1e6,M[clean].min()-0.05])
-g=np.linspace(poc[1]+.01,MLIM,500); ax.plot(g,cc(g,*poc),'k-',lw=2,label='Ciardullo canonical')
-ax.axvline(MLIM,ls=':',color='.4'); ax.set_yscale('log')
-# ax.set_title(f"C.  118 High-confidence + Probable, no mask\n$M^*$ = {poc[1]:.3f}   $\\Delta$AIC = 0.10  (rank 2/10)",fontsize=10)
-# changed 2026-08-30: see the note on panel A; delta-AIC is now computed, the rank dropped.
-title_C = ax.set_title("",fontsize=10)
+BIN = cfg["pnlf"]["bin_width_mag"]
+MLIM = cfg["pnlf"]["completeness_limit_mag"]   # 5 sigma completeness limit
+MCEIL = cfg.ceiling_magnitude()                # physical flux ceiling, Step 4c
+ALO, AHI = -4.4, -3.7   # the old hand-chosen bright-bin mask, panel B only
 
-# Panel B, the published masked fit, is the reference the other two are quoted against.
-dAIC_A = aic - aic2
-dAIC_C = aicc - aic2
-title_A.set_text("A.  All 220, no mask\n"
-                 f"Ciardullo canonical: $\\Delta$AIC = {dAIC_A:.1f} vs panel B")
-title_C.set_text("C.  118 High-confidence + Probable, no mask\n"
-                 f"$M^*$ = {poc[1]:.3f}   $\\Delta$AIC = {dAIC_C:.1f} vs panel B")
-ax.legend(fontsize=8,frameon=False)
-for a in axes:
-    a.set_xlim(-5.5,2.3)
-    for s in ('top','right'): a.spines[s].set_visible(False)
-fig.suptitle("Radio PNLF — effect of luminosity masking versus sample cleaning",fontsize=12.5,y=1.0)
-fig.tight_layout(rect=[0,0,1,0.94])
-fig.savefig(f'{B}/05_Figures/step6e_pnlf_mask_vs_clean.pdf')
-print("A  M*=%.3f  chi2red=%.2f"%(po[1],rc))
-print("B  M*=%.3f  chi2red=%.2f"%(po2[1],rc2))
-print("C  M*=%.3f  chi2red=%.2f"%(poc[1],rcc))
+COL = {"thermal": "#1f6fb4", "uncertain": "#e59a1e",
+       "steep": "#c0392b", "no_fit": "0.72"}
+ORDER = ["thermal", "uncertain", "no_fit", "steep"]
+
+
+def ciardullo(m, N, Ms):
+    v = N * np.exp(cfg["pnlf"]["ciardullo_alpha"] * (m - Ms)) * (1 - np.exp(cfg["pnlf"]["ciardullo_beta"] * (Ms - m)))
+    return np.where(m > Ms, np.maximum(v, 1e-4), 1e-4)
+
+
+# One binning for every panel, so the three are directly comparable.
+edges = np.arange(np.floor(M[fin].min() / BIN) * BIN,
+                  np.ceil(M[fin].max() / BIN) * BIN + BIN, BIN)
+counts, _ = np.histogram(M[fin], bins=edges)
+centres = 0.5 * (edges[:-1] + edges[1:])
+nz = counts > 0
+mx, my = centres[nz], counts[nz].astype(float)
+
+stack = {}
+for s in ORDER:
+    h, _ = np.histogram(M[fin & (sp == s)], bins=edges)
+    stack[s] = h[nz].astype(float)
+
+
+def fit(mask):
+    x, y = mx[mask], my[mask]
+    ye = np.sqrt(y)
+    ye[ye == 0] = 1.0
+    lb = [0.0, x.min() - 5.0]
+    ub = [1e6, x.min() - 0.05]
+    r = lambda p: np.sum(((y - ciardullo(x, *p)) / ye) ** 2)
+    de = differential_evolution(r, bounds=list(zip(lb, ub)), seed=cfg["pnlf"]["fit_seed"],
+                                maxiter=9000, tol=1e-12, popsize=35)
+    po, _ = curve_fit(ciardullo, x, y, p0=de.x, bounds=(lb, ub),
+                      sigma=ye, absolute_sigma=True, maxfev=200000)
+    chi = np.sum(((y - ciardullo(x, *po)) / ye) ** 2)
+    return po, chi + 2 * len(po), chi / max(len(y) - len(po), 1)
+
+
+mask_A = mx <= MLIM
+mask_B = (mx <= MLIM) & ~((mx > ALO) & (mx < AHI))
+mask_C = (mx <= MLIM) & (mx >= MCEIL)
+
+poA, aicA, rcA = fit(mask_A)
+poB, aicB, rcB = fit(mask_B)
+poC, aicC, rcC = fit(mask_C)
+
+# Panel A is also the answer to "what happens with the over-ceiling objects
+# left in the fit", so it is written out as a number and not only drawn.
+from astropy.table import Table as _Table
+_Table(rows=[("no_ceiling_mask", float(poA[1]), float(rcA), int(mask_A.sum())),
+             ("hand_chosen_bright_mask", float(poB[1]), float(rcB), int(mask_B.sum())),
+             ("physical_flux_ceiling", float(poC[1]), float(rcC), int(mask_C.sum()))],
+        names=("treatment", "M_star", "chi2_nu", "n_bins")).write(
+    cfg.out("step6e_mask_comparison.csv"), format="ascii.csv", overwrite=True)
+
+# ------------------------------------------------------------------- figure
+fig, axes = plt.subplots(1, 3, figsize=(14.4, 4.6), sharey=True)
+
+# Axis range from the data, with a margin.  A hard-coded range silently cut
+# the brightest bins out of an earlier version of this figure.
+XLO = min(M[fin].min(), MCEIL) - 0.45
+XHI = M[fin].max() + 0.45
+YTOP = max(my.max() * 2.2, 100)
+
+panels = [
+    (axes[0], mask_A, poA,
+     f"A.  All {N_TOT}, no mask",
+     f"$M^*$ = {poA[1]:.2f}   $\\chi^2_\\nu$ = {rcA:.2f}"),
+    (axes[1], mask_B, poB,
+     f"B.  All {N_TOT}, hand-chosen bright-bin mask",
+     f"$M^*$ = {poB[1]:.2f}   $\\chi^2_\\nu$ = {rcB:.2f}   $\\Delta$AIC = {aicB - aicC:+.1f}"),
+    (axes[2], mask_C, poC,
+     f"C.  All {N_TOT}, physical flux ceiling (adopted)",
+     f"$M^*$ = {poC[1]:.2f}   $\\chi^2_\\nu$ = {rcC:.2f}"),
+]
+
+for ax, mask, po, ttl, sub in panels:
+    # ghosted bars everywhere, solid bars only where the fit uses them
+    bot = np.zeros(len(mx))
+    for s in ORDER:
+        ax.bar(mx, stack[s], bottom=bot, width=BIN * 0.92, color=COL[s],
+               lw=0, alpha=0.30)
+        bot += stack[s]
+    bot = np.zeros(int(mask.sum()))
+    for s in ORDER:
+        ax.bar(mx[mask], stack[s][mask], bottom=bot, width=BIN * 0.92,
+               color=COL[s], lw=0)
+        bot += stack[s][mask]
+
+    g = np.linspace(po[1] + 0.01, MLIM, 500)
+    ax.plot(g, ciardullo(g, *po), "k-", lw=2, zorder=5)
+
+    ax.axvline(MLIM, ls=":", color="0.4")
+    ax.set_yscale("log")
+    ax.set_ylim(0.5, YTOP)
+    ax.set_xlim(XLO, XHI)
+    ax.set_title(ttl + "\n" + sub, fontsize=9.8)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+
+# panel-specific annotation
+axes[1].axvspan(ALO, AHI, color="k", alpha=0.07, zorder=0)
+axes[2].axvline(MCEIL, ls="--", color="#c0392b", lw=1.3)
+axes[2].text(MCEIL - 0.08, YTOP * 0.45, "flux ceiling", rotation=90,
+             ha="right", va="top", fontsize=7.8, color="#c0392b")
+
+axes[0].set_ylabel("$N$ per 0.3 mag bin")
+axes[1].set_xlabel("$M_{\\rm radio}$ / mag")
+
+axes[0].legend(handles=[Patch(facecolor=COL[s], label=s.replace("_", " "))
+                        for s in ORDER],
+               fontsize=7.5, frameon=False, loc="upper left")
+axes[1].legend(handles=[Patch(facecolor="0.55", alpha=0.35,
+                              label="Masked bins (plotted, not fitted)")],
+               fontsize=7.5, frameon=False, loc="upper left")
+axes[2].legend(handles=[plt.Line2D([], [], color="k", lw=2,
+                                   label="Ciardullo canonical")],
+               fontsize=7.5, frameon=False, loc="upper left")
+
+fig.suptitle("Radio PNLF — how the bright-end treatment changes $M^*$",
+             fontsize=12.5, y=1.0)
+fig.tight_layout(rect=[0, 0, 1, 0.90])
+fig.savefig(cfg.fig("step6e_pnlf_mask_vs_clean.pdf"), bbox_inches="tight")
+
+print(f"sample: {N_TOT} sources, {len(mx)} populated bins")
+print(f"  A  no mask               M*={poA[1]:7.3f}  chi2red={rcA:5.2f}  bins={int(mask_A.sum())}")
+print(f"  B  hand-chosen mask      M*={poB[1]:7.3f}  chi2red={rcB:5.2f}  bins={int(mask_B.sum())}")
+print(f"  C  physical ceiling      M*={poC[1]:7.3f}  chi2red={rcC:5.2f}  bins={int(mask_C.sum())}")
+print(f"  x-range {XLO:.2f} to {XHI:.2f}  (data {M[fin].min():.2f} to {M[fin].max():.2f})")
 print("saved step6e_pnlf_mask_vs_clean.pdf")

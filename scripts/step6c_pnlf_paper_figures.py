@@ -16,7 +16,7 @@ Run after Step 07a has produced step6a_pnlf.vot:
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -24,31 +24,30 @@ import matplotlib.pyplot as plt
 from _support.plot_style import apply_paper_style
 from matplotlib.ticker import AutoMinorLocator
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyWarning
 from scipy.optimize import curve_fit, differential_evolution
 from scipy.stats import skewnorm, t as student_t
 
-warnings.filterwarnings("ignore")
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
-np.random.seed(42)
 
-# Paths
-BASE  = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-INPUT = os.path.join(BASE, "03_Outputs", "step6a_pnlf.vot")
-FIGS  = os.path.join(BASE, "05_Figures")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-# Settings
-L_REF       = 1e20
-BIN_W       = 0.3
-M_LIM       = -0.5
-M_CEIL      = -4.52     # 2.2 mJy at 49.59 kpc; brighter than an LMC PN can be
-# D_KPC       = 49.97
-# updated 2026-08-30: Pietrzynski et al. 2019 gives 49.59 kpc (mu = 18.477); 49.97 kpc was inconsistent with the quoted modulus
-D_KPC       = 49.59
-# RMS_MEERKAT = 10.0
-# updated 2026-08-30: median rms 11 uJy/beam from Cotton et al. 2026 / Rajabpour et al. 2026; S(M_lim) recomputed at d = 49.59 kpc
-RMS_MEERKAT = 11.0
-# S_MLIM_UJY  = 53.05
-S_MLIM_UJY  = 53.87
+cfg = config.load()
+L_REF = cfg["pnlf"]["reference_luminosity_cgs"]
+BIN_W = cfg["pnlf"]["bin_width_mag"]
+M_LIM = cfg["pnlf"]["completeness_limit_mag"]
+M_CEIL = cfg.ceiling_magnitude()      # the Step 4c flux ceiling as a magnitude
+D_KPC = cfg["distance"]["lmc_kpc"]
+S_MLIM_UJY = cfg.completeness_flux_ujy()
+RMS_MEERKAT = cfg["meerkat"]["median_rms_ujy"]
+CIAR_ALPHA = cfg["pnlf"]["ciardullo_alpha"]
+CIAR_BETA = cfg["pnlf"]["ciardullo_beta"]
+SEED = cfg["pnlf"]["fit_seed"]
+
+INPUT = cfg.out("step6a_pnlf.vot")
+np.random.seed(SEED)
 
 print("step6c: making the PNLF paper figures")
 
@@ -134,7 +133,7 @@ def f_ciar_free(m, N0, Ms, alpha, beta):
     return np.where(m > Ms, np.maximum(v, 1e-4), 1e-4)
 
 def f_ciar_canonical(m, N0, Ms):
-    v = N0 * np.exp(0.307*(m - Ms)) * (1 - np.exp(3.0*(Ms - m)))
+    v = N0 * np.exp(CIAR_ALPHA*(m - Ms)) * (1 - np.exp(CIAR_BETA*(Ms - m)))
     return np.where(m > Ms, np.maximum(v, 1e-4), 1e-4)
 
 # Generic fitter
@@ -292,7 +291,7 @@ ax.text(0.97, 0.03, f"$N = {N_src}$ sources",
         bbox=dict(boxstyle="round,pad=0.3", fc="white", alpha=0.85, ec="#ccc"))
 
 plt.tight_layout()
-out1 = os.path.join(FIGS, "step6c_pnlf_model_overlay.pdf")
+out1 = cfg.fig("step6c_pnlf_model_overlay.pdf")
 plt.savefig(out1, format="pdf", dpi=200, bbox_inches="tight", facecolor="white")
 plt.close()
 print(f"    -> {out1}")
@@ -335,9 +334,9 @@ def fit_ciar(alpha_fix, beta_fix, alpha_free=False, beta_free=False):
         print(f"    FAILED: {e}")
         return None, None, None, None, lbl, False
 
-p1, m1, r1, c1, l1, ok1 = fit_ciar(0.307, 3.0, False, False)
-p2, m2, r2_, c2, l2, ok2 = fit_ciar(0.307, 3.0, True, False)
-p3, m3, r3, c3, l3, ok3 = fit_ciar(0.307, 3.0, True, True)
+p1, m1, r1, c1, l1, ok1 = fit_ciar(CIAR_ALPHA, CIAR_BETA, False, False)
+p2, m2, r2_, c2, l2, ok2 = fit_ciar(CIAR_ALPHA, CIAR_BETA, True, False)
+p3, m3, r3, c3, l3, ok3 = fit_ciar(CIAR_ALPHA, CIAR_BETA, True, True)
 
 if ok1: print(f"    Canonical : M*={p1[1]:.3f}  R²={r1:.3f}")
 if ok2: print(f"    Free α    : M*={p2[1]:.3f}  α={p2[2]:.3f}  R²={r2_:.3f}")
@@ -398,7 +397,7 @@ ax.text(0.97, 0.03, "\n".join(pbox), transform=ax.transAxes,
                   alpha=0.93, ec="#ccc", lw=0.7))
 
 plt.tight_layout()
-out2 = os.path.join(FIGS, "step6c_pnlf_ciardullo_comparison.pdf")
+out2 = cfg.fig("step6c_pnlf_ciardullo_comparison.pdf")
 plt.savefig(out2, format="pdf", dpi=200, bbox_inches="tight", facecolor="white")
 plt.close()
 print(f"    -> {out2}")

@@ -1,0 +1,157 @@
+# Configuration for the LMC radio PN pipeline.
+#
+# Every input path and every fixed parameter the analysis uses lives here.
+# Nothing that sets a threshold, a cut, a mask or a physical constant is
+# written inside a script.  Numbers that are *results* are not in this file;
+# they are computed and written to 03_Outputs and results/summary.md.
+#
+# Paths may be absolute or relative to the repository root, and ~ expands.
+
+paths:
+  # Where the input catalogues and images live.  These are not redistributed
+  # with the code; README.md gives the archive query for each one.
+  data: "../01_Data"
+  # Everything the pipeline writes.
+  outputs: "../03_Outputs"
+  # Paper figures, at the file names the manuscript uses.
+  figures: "figures"
+  # Machine-written LaTeX tables, likewise.
+  tables: "tables"
+  # The generated numbers report.
+  results: "results"
+  # Hand-made inputs that are products of this work: the visual detection list.
+  manual: "manual"
+  # Per-source inspection pages (SEDs, cutouts).  Quality control, not paper
+  # figures; large, and not tracked.
+  inspect: "../04_Inspect"
+
+inputs:
+  hash_catalogue: "HASH_V163_full.vot"          # HASH PN database, VizieR V/163
+  reid_positions: "Warren_PNE_673.vot"          # R14 running numbers and optical class
+  reid_photometry: "reid2014_photometry.vot"    # R14 multiwavelength photometry (SAGE 8 um)
+  meerkat_3sigma: "MeerKAT_3sigma.vot"          # Aegean broadband 3 sigma catalogue
+  meerkat_5sigma: "MeerKAT_Final_5sigma.vot"    # Aegean multi-channel 5 sigma catalogue
+  askap_catalogue: "ASKAP_LMC_888MHz_catalogue_full.vot"   # Pennock et al. 2021, all tiers
+  meerkat_mosaic: "LMC_I_mosaic_ch0_beam.fits"  # beam-corrected mosaic, Jy/beam
+  meerkat_rms: "LMC_I_mosaic_ch0_rms.fits"      # matching RMS map, Jy/beam
+  askap_image: "ASKAP_LMC_888MHz_image.fits"    # used only for the ASKAP footprint
+  mcels_ha: "LMC.ha.fits"                       # inspection cutouts
+  mcels_oiii: "LMC.oiii.fits"                   # inspection cutouts
+
+# --- Step 1: parent catalogue -----------------------------------------------
+parent:
+  domain: "LMC"           # HASH Domain flag selecting the galaxy
+  pn_status: ["T", "P"]   # HASH PNstat kept: true PN and probable PN
+  ancillary_match_arcsec: 4.5   # radius for attaching RP number and photometry
+  excerpt_rows: 10        # rows in the published catalogue extract
+
+# --- Step 2: radio cross-matching -------------------------------------------
+crossmatch:
+  accept_arcsec: 4.5      # acceptance radius, both surveys: 3 MeerKAT pixels
+  askap_review_arcsec: 6.0    # 4.5-6.0 flagged as borderline, not accepted
+  askap_outer_arcsec: 10.0    # 6.0-10.0 flagged as wide review, not accepted
+  # Survey areas, used only for the chance-coincidence estimate.  These are the
+  # finite-data areas of the two mosaics, measured from their own pixel masks
+  # (fraction of finite pixels x pixel area x image size), not the nominal
+  # field areas: the source density that matters is the one over the area the
+  # catalogue was actually extracted from.  Pennock et al. quote ~120 deg2 for
+  # the EMU LMC field, which would give a slightly smaller ASKAP expectation.
+  meerkat_area_deg2: 105.4    # 69.0 per cent of a 152.7 deg2 image
+  askap_area_deg2: 144.1      # 47.2 per cent of a 305.3 deg2 image
+
+# --- Radio surveys ----------------------------------------------------------
+meerkat:
+  frequency_ghz: 1.295
+  beam_fwhm_arcsec: 8.0
+  median_rms_ujy: 11.0    # published median local noise of the mosaic
+  pixel_arcsec: 1.5
+  # Sub-band centres used in the spectral-index fit, MHz.  Channels 8 and 9
+  # (~1.1 GHz) are omitted for persistent RFI.
+  channels:
+    ch2: 908.037
+    ch3: 952.342
+    ch4: 996.646
+    ch5: 1043.46
+    ch6: 1092.78
+    ch7: 1144.61
+    ch10: 1317.23
+    ch11: 1381.18
+    ch12: 1448.05
+    ch13: 1519.94
+    ch14: 1593.92
+    ch15: 1656.2
+
+askap:
+  frequency_mhz: 888.0
+  calibration_fraction: 0.08   # published absolute flux-scale term, added in quadrature
+
+# --- Step 3: sub-threshold recovery -----------------------------------------
+visual:
+  search_arcsec: 6.0        # peak search radius around the optical position
+  aperture_arcsec: 4.0      # one beam half-width; see enclosed_fraction below
+  rms_annulus_arcsec: [30.0, 90.0]   # local noise annulus
+  # Fraction of an unresolved source enclosed by the aperture, for a Gaussian
+  # beam: 1 - exp(-4 ln2 r^2 / FWHM^2).  At r = FWHM/2 this is exactly 0.5, so
+  # the raw aperture sum is doubled.  Computed at run time from the aperture
+  # radius and the beam, never typed in; the value is recorded in the output.
+  # Sources whose aperture photometry is confused by a neighbour or by
+  # extended emission.  Flagged in the catalogue; no class is changed.
+  confused_ids: ["RP1114", "RP980"]
+  # RP numbers identified by eye on the MeerKAT mosaic as having emission at
+  # the optical position.  This is the one manual input to the pipeline; the
+  # inspection pages that produced it are written by step 3a.  The file lives
+  # in the repository, not in the data directory, because it is a product of
+  # this work rather than an archive download.
+  detections_file: "manual/visual_detections.txt"
+
+# --- Step 4a: spectral index ------------------------------------------------
+spectral_index:
+  min_points_to_fit: 2      # a line needs two points; reliability needs more
+  min_points_reliable: 4    # n_pts >= 4
+  max_alpha_error: 0.5      # delta alpha < 0.5
+  max_reduced_chisq: 10.0   # chi2_nu < 10
+  thermal_range: [-0.2, 2.0]   # thermal: -0.2 <= alpha <= +2.0
+  steep_below: -0.5            # steep: alpha < -0.5; uncertain in between
+  default_flux_error_fraction: 0.10   # used only where the catalogue gives none
+  # Flux bins, mJy, for the comparison of PN and field spectral indices.
+  field_comparison_bins: [0.0, 0.3, 0.6, 1.0, .inf]
+
+# --- Step 4b: mid-infrared to radio ratio -----------------------------------
+mir_radio:
+  irac8_zero_point_jy: 64.13   # IRAC 8.0 um zero-magnitude flux density
+  pn_band: [0.5, 10.0]         # Cohen et al. 2011 PN-like band
+  hii_above: 20.0              # H II-like
+  cohen_pn_median: 4.7         # Galactic PN median, for reference on the figure
+  # Frequency preference for the adopted ratio: the flux actually measured,
+  # never one scaled to a frequency at which there is no measurement.
+  frequency_order: ["askap_888", "meerkat_1295"]
+
+# --- Step 4c: flux ceiling --------------------------------------------------
+flux_ceiling:
+  ceiling_mjy: 2.2        # Filipovic et al. 2009, NGC 7027 at the MCs distance
+  ngc7027_jy: 1.543       # Zijlstra et al. 2008, 1.465 GHz integrated
+  ngc7027_kpc: 0.98
+  smp_lmc_83_mjy: 1.36    # brightest LMC PN detected to date, for reference
+
+# --- Step 5: scoring --------------------------------------------------------
+scoring:
+  # Radio_High needs every measurable criterion passed and at least this many
+  # measurable.  Nothing in the score reads the optical classification.
+  min_measurable_for_high: 2
+
+# --- Step 6: the luminosity function ----------------------------------------
+distance:
+  lmc_kpc: 49.59          # Pietrzynski et al. 2019, mu = 18.477
+  parsec_cm: 3.0856776e+18
+
+pnlf:
+  bin_width_mag: 0.3
+  reference_luminosity_cgs: 1.0e+20   # zero point of M_radio, erg/s/Hz
+  completeness_limit_mag: -0.5       # 5 sigma limit; bins fainter are not fitted
+  # The bright mask is the flux ceiling above, converted to a magnitude at the
+  # adopted distance.  It is computed, not typed in.
+  ciardullo_alpha: 0.307   # optical faint-end slope, held fixed in the canonical form
+  ciardullo_beta: 3.0      # optical cutoff sharpness, likewise
+  fit_seed: 42             # differential evolution is stochastic; pin it
+  de_tolerance: 1.0e-13
+  de_popsize: 40

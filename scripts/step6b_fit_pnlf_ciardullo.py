@@ -10,15 +10,10 @@ Three Ciardullo fits with increasing parameter freedom:
   Fit 2 (blue)  : alpha free,  beta=3.0 fixed
   Fit 3 (red)   : alpha free,  beta free (>= 1.0)
 
-Completeness limit:
-  M_LIM = -0.5
-M_LIM = -0.5  ->  S = 53.9 muJy  ~  5sigma at rms ~11 muJy beam⁻¹
-  (MeerKAT published median rms = 11 muJy beam⁻¹, Catalogue_LMC_I_Mosaic)
 
-Excluded bins (open circles, not fitted):
-  - Anomalous bright bins M in [-4.4, -3.7]: likely young compact PNe
-    brighter than 2.2 mJy, above the physical ceiling for an LMC PN
-  - Incomplete bins M > M_LIM: below MeerKAT sensitivity threshold
+Excluded bins (open circles, not fitted), and nothing else:
+  - bins brighter than the Step 4c flux ceiling
+  - bins fainter than the 5 sigma completeness limit
 
 Output
 ------
@@ -27,35 +22,37 @@ Output
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyWarning
 from scipy.optimize import curve_fit, differential_evolution
 
-warnings.filterwarnings("ignore")
+from _support.plot_style import apply_paper_style
+
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
-np.random.seed(42)
 
-# Paths
-BASE  = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-INPUT = os.path.join(BASE, "03_Outputs", "step6a_pnlf.vot")
-OUT   = os.path.join(BASE, "05_Figures", "step6b_pnlf_ciardullo_fits.pdf")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
 
-# Settings
-L_REF       = 1e20     # erg/s/Hz  (reference luminosity for radio magnitudes)
-BIN_W       = 0.3      # magnitude bin width
-M_LIM       = -0.5      # completeness limit
-M_CEIL      = -4.52     # 2.2 mJy at 49.59 kpc; brighter than an LMC PN can be
-               # S(M_LIM) = 53.9 muJy ~ 5sigma at rms ~11 muJy beam⁻¹
-# S_MLIM_UJY  = 53.05    # muJy at M_LIM (pre-computed)
-# updated 2026-08-30: median rms 11 uJy/beam from Cotton et al. 2026 / Rajabpour et al. 2026; S(M_lim) recomputed at d = 49.59 kpc
-S_MLIM_UJY  = 53.87    # muJy at M_LIM, from L(M=-0.5) at d = 49.59 kpc
-# RMS_MEERKAT = 10.0     # muJy/beam — representative local rms
-RMS_MEERKAT = 11.0     # muJy/beam — published median for the MeerKAT LMC mosaic
+cfg = config.load()
+L_REF = cfg["pnlf"]["reference_luminosity_cgs"]
+BIN_W = cfg["pnlf"]["bin_width_mag"]
+M_LIM = cfg["pnlf"]["completeness_limit_mag"]
+M_CEIL = cfg.ceiling_magnitude()      # the Step 4c flux ceiling as a magnitude
+S_MLIM_UJY = cfg.completeness_flux_ujy()
+RMS_MEERKAT = cfg["meerkat"]["median_rms_ujy"]
+CIAR_ALPHA = cfg["pnlf"]["ciardullo_alpha"]
+CIAR_BETA = cfg["pnlf"]["ciardullo_beta"]
+SEED = cfg["pnlf"]["fit_seed"]
+np.random.seed(SEED)
+
+INPUT = cfg.out("step6a_pnlf.vot")
+OUT   = cfg.fig("step6b_pnlf_ciardullo_fits.pdf")
 
 print("step6b: fitting the Ciardullo PNLF")
 
@@ -100,7 +97,7 @@ mye = np.sqrt(my); mye[mye==0] = 1.0
 
 # Classify bins
 # Two masks, and nothing else.  Bins brighter than the physical ceiling
-# (M_CEIL = -4.52, i.e. 2.2 mJy at 49.59 kpc) and bins fainter than the
+# (the 2.2 mJy ceiling as a magnitude) and bins fainter than the
 # 5-sigma completeness limit are excluded from the fit but still drawn, as
 # open symbols, so the reader can see what was left out.  The hand-picked
 # 'anomalous' window that used to sit between -4.4 and -3.7 is gone.

@@ -1,26 +1,34 @@
-"""Single summary figure: detection fraction, evidence grade and spectral class.
+"""Single summary figure: detection fraction, radio class and spectral class.
 
-Replaces the separate count panels used in earlier drafts.
+Panel (b) shows the radio classification of Step 5, which uses no optical
+information.  Earlier drafts showed an evidence grade that took the optical
+class as one of its inputs, which made this panel and the comparison against
+the optical classification two views of partly the same thing.
 
-Input   03_Outputs/step5b_spectral_index_recut.vot
+Input   03_Outputs/step5d_criteria_tally.vot
 Output  05_Figures/step5c_detection_and_evidence.pdf
 
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
-import warnings, os; warnings.filterwarnings('ignore')
+import sys, warnings, os
 import numpy as np, matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyWarning
 
-B=os.environ.get("PNBASE",".")
-c=Table.read(B+'/03_Outputs/step5b_spectral_index_recut.vot',format='votable')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+
+warnings.simplefilter("ignore", AstropyWarning)
+cfg = config.load()
+c=Table.read(cfg.out('step5d_criteria_tally.vot'),format='votable')
 S=lambda k: np.array([str(x).strip() for x in c[k]])
-rc,surv,oc,sp,hs=S('reid_classification'),S('detection_surveys'),S('our_classification'),S('sp_class_recut'),S('hash_status_label')
+rc,surv,oc,sp,hs=S('reid_classification'),S('detection_surveys'),S('radio_only_class'),S('sp_class'),S('hash_status_label')
 # Parent-sample totals per optical class, read from the parent catalogue
 # rather than written in by hand, so that they follow the sample instead of
 # having to be remembered whenever it changes.
-_parent = Table.read(B+'/03_Outputs/step1_parent_catalogue.vot', format='votable')
+_parent = Table.read(cfg.out('step1_parent_catalogue.vot'), format='votable')
 _pc = np.array([str(x).strip() for x in _parent['reid_class']])
 TOT = {k: int(np.sum(_pc == k)) for k in
        ('True', 'Known', 'Possible', 'Likely', 'Unknown')}
@@ -34,7 +42,7 @@ def wilson(k,n,z=1.0):
 plt.rcParams.update({'font.family':'DejaVu Sans','font.size':9,'axes.linewidth':0.9,
                      'xtick.direction':'in','ytick.direction':'in','xtick.top':True,'ytick.right':True})
 fig,axes=plt.subplots(1,3,figsize=(11.6,3.5))
-CB={'thermal':'#1f6fb4','uncertain':'#e59a1e','steep':'#c0392b','no_fit':'#b9c0c8'}
+CB={'thermal':'#1f6fb4','uncertain':'#e59a1e','steep':'#c0392b','no_reliable_alpha':'#b9c0c8'}
 
 # --- (a) detection fraction vs Reid class, with Wilson intervals
 ax=axes[0]
@@ -57,14 +65,13 @@ ax.set_xlabel('R14 optical class')
 ax.set_ylim(0,78); ax.legend(frameon=False, fontsize=8, loc='upper left')
 ax.text(0.97,0.95,'(a)',transform=ax.transAxes,ha='right',va='top',fontweight='bold')
 
-# --- (b) spectral composition of each confidence grade
+# --- (b) spectral composition of each radio class
 ax=axes[1]
-grades=['High-confidence PN','Probable PN','Possible PN','Questionable/review']
-# short=['High','Probable','Possible','Question.']
-# changed 2026-08-30: 'Question.' was a truncated word, not an abbreviation
-short=['High','Probable','Possible','Questionable']
-order=['thermal','uncertain','steep','no_fit']
-labels={'thermal':'Thermal','uncertain':'Uncertain','steep':'Steep','no_fit':'No reliable $\\alpha$'}
+grades=['Radio_High','Radio_Possible','Radio_Weak','Radio_Rejected']
+short=['High','Possible','Weak','Rejected']
+order=['thermal','uncertain','steep','no_reliable_alpha']
+labels={'thermal':'Thermal','uncertain':'Uncertain','steep':'Steep',
+        'no_reliable_alpha':'No reliable $\\alpha$'}
 y=np.arange(len(grades)); left=np.zeros(len(grades))
 for s in order:
     frac=np.array([np.sum((oc==g)&(sp==s))/max(np.sum(oc==g),1) for g in grades])*100
@@ -73,7 +80,7 @@ for s in order:
 for i,g in enumerate(grades):
     ax.text(101.5,y[i],f'$N$={int(np.sum(oc==g))}',va='center',fontsize=8)
 ax.set_yticks(y); ax.set_yticklabels(short); ax.invert_yaxis()
-ax.set_xlabel('Spectral class (per cent of grade)'); ax.set_xlim(0,100)
+ax.set_xlabel('Spectral class (per cent of class)'); ax.set_xlim(0,100)
 ax.legend(frameon=False,fontsize=7.4,ncol=2,loc='lower center',bbox_to_anchor=(0.5,-0.42))
 ax.text(0.97,0.95,'(b)',transform=ax.transAxes,ha='right',va='top',fontweight='bold')
 
@@ -99,5 +106,5 @@ ax.text(np.sqrt(0.5*10),0.03,'Galactic band',transform=ax.get_xaxis_transform(),
 for a in axes:
     for s in ('top','right'): a.spines[s].set_visible(True)
 fig.tight_layout(pad=0.7)
-out=B+"/05_Figures/step5c_detection_and_evidence.pdf"
+out=cfg.fig("step5c_detection_and_evidence.pdf")
 fig.savefig(out); print("wrote",out)

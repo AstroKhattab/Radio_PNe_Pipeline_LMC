@@ -19,18 +19,17 @@ Outputs
     03_Outputs/step3b_meerkat_visual.vot — Catalogue with fluxes
     04_Inspect/figures/step3b_meerkat_visual_beams.pdf — Cutouts for verification
 
-After verifying cutouts, run
-step3c_build_meerkat_catalogue_and_multisurvey_figures.py to merge.
+After verifying the cutouts, run step3c to merge these into the detection
+catalogue.
 
 O. K. Khattab & M. D. Filipovic, Western Sydney University.
 """
 
-import os, warnings
+import os, sys, warnings
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from _support.plot_style import apply_paper_style
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_pdf import PdfPages
 from astropy.table import Table, Column
@@ -38,54 +37,48 @@ from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
 from astropy.io import fits
 from astropy.nddata import Cutout2D
+from astropy.utils.exceptions import AstropyWarning
 import astropy.units as u
 
-warnings.filterwarnings("ignore")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _support import config
+from _support.plot_style import apply_paper_style
+
+warnings.simplefilter("ignore", AstropyWarning)
 apply_paper_style()
 
-# Visual IDs
-VISUAL_IDS = [
-    "RP607",  "RP650",  "RP652",  "RP656",
-    "RP980",  "RP1114", "RP1234",
-    "RP1324", "RP1352", "RP1557", "RP1606", "RP1608",
-    "RP1634", "RP1636", "RP1684", "RP1687", "RP1695",
-    "RP2278", "RP2294", "RP2297", "RP2304",
-    "RP2311", "RP2312", "RP2326", "RP2708", "RP3449",
-    "RP3464", "RP3661", "RP4065", "RP4081",
-    "RP4176", "RP4285",
-]
+cfg = config.load()
+ENTRIES     = cfg.visual_ids()
+VISUAL_IDS  = [rp for rp, _ in ENTRIES]
+OVERRIDES   = {rp: radius for rp, radius in ENTRIES if radius is not None}
 
-# Per-source search radius overrides (arcsec)
-# Use 0 to extract directly at Reid position (no peak search)
-OVERRIDES = {
-    "RP1114": 0.0,   # bright extended source nearby — extract at Reid pos
-    "RP2708": 0.0,   # wrong source grabbed — extract at Reid pos
-}
+BEAM_FILE = cfg.data("meerkat_mosaic")
+RMS_FILE  = cfg.data("meerkat_rms")
+HA_FILE   = cfg.data("mcels_ha")
+OIII_FILE = cfg.data("mcels_oiii")
+TO_CHECK  = cfg.out("step3a_meerkat_to_check.vot")
 
-# Paths
-BASE      = os.path.expanduser("~/Desktop/Research/PN LMC Paper")
-DATA      = os.path.join(BASE, "01_Data")
-OUTS      = os.path.join(BASE, "03_Outputs")
-INSP      = os.path.join(BASE, "04_Inspect", "figures")
+OUT_VOT   = cfg.out("step3b_meerkat_visual.vot")
+OUT_PDF   = cfg.inspect("figures/step3b_meerkat_visual_beams.pdf")
+os.makedirs(os.path.dirname(OUT_PDF), exist_ok=True)
 
-BEAM_FILE = os.path.join(DATA, "LMC_I_mosaic_ch0_beam.fits")
-RMS_FILE  = os.path.join(DATA, "LMC_I_mosaic_ch0_rms.fits")
-HA_FILE   = os.path.join(DATA, "LMC.ha.fits")
-OIII_FILE = os.path.join(DATA, "LMC.oiii.fits")
-TO_CHECK  = os.path.join(OUTS, "step3a_meerkat_to_check.vot")
+SEARCH_RAD  = cfg["visual"]["search_arcsec"]
+BEAM_FWHM   = cfg["meerkat"]["beam_fwhm_arcsec"]
+BEAM_RAD    = cfg["visual"]["aperture_arcsec"]
+RMS_ANN_IN, RMS_ANN_OUT = cfg["visual"]["rms_annulus_arcsec"]
+CUTOUT_SIZE = 90.0   # arcsec — inspection cutout side, cosmetic only
+FLUX_SCALE_ERR = 0.05   # fractional flux-scale term, added in quadrature
 
-OUT_VOT   = os.path.join(OUTS, "step3b_meerkat_visual.vot")
-OUT_PDF   = os.path.join(INSP, "step3b_meerkat_visual_beams.pdf")
-
-SEARCH_RAD  = 6.0    # arcsec — peak search radius (4 pixels @ 1.5"/pix)
-BEAM_FWHM   = 8.0    # arcsec — MeerKAT beam FWHM
-BEAM_RAD    = 4.0    # arcsec — half-beam
-RMS_ANN_IN  = 30.0   # arcsec
-RMS_ANN_OUT = 90.0   # arcsec
-CUTOUT_SIZE = 90.0   # arcsec — full cutout side
+# A circular aperture of one beam half-width catches only half the flux of an
+# unresolved source.  Correcting for that is the difference between the
+# integrated flux density and half of it, and it propagates all the way to the
+# luminosity function.
+ENCLOSED = cfg.enclosed_fraction(BEAM_RAD)
 
 print("step3b: extracting MeerKAT fluxes for the visual detections")
 print(f"  Visual IDs: {len(VISUAL_IDS)}")
+print(f"  Aperture r = {BEAM_RAD}\" on an {BEAM_FWHM}\" beam encloses {ENCLOSED:.4f}"
+      f" of a point source; fluxes are divided by that")
 
 if not VISUAL_IDS:
     print("  No IDs. Exiting."); exit(0)
@@ -105,7 +98,9 @@ for vid in VISUAL_IDS:
         found_mask[m[0]] = True
 
 if not_found:
-    print(f"  WARNING: not found: {not_found}")
+    print(f"  inspected but not in the parent sample ({len(not_found)}): "
+          f"{', '.join(not_found)}")
+    print("  (HASH V/163 does not list these as true or probable PNe)")
 
 visual = tbl[found_mask]
 n_vis  = len(visual)
@@ -143,6 +138,8 @@ print(f"  Pixel scale: {pscale:.3f}\"/pix")
 
 # Beam area in pixels  (Gaussian beam: A = pi*bmaj*bmin / (4*ln2) / pixarea)
 beam_area_pix = (np.pi * BEAM_FWHM * BEAM_FWHM) / (4.0 * np.log(2) * pscale**2)
+aper_area_pix = np.pi * BEAM_RAD**2 / pscale**2
+n_beams_aper  = aper_area_pix / beam_area_pix
 print(f"  Beam area: {beam_area_pix:.1f} pixels")
 
 # Flux extraction
@@ -159,6 +156,7 @@ col_snr      = np.full(n_vis, np.nan)
 col_ra_radio = np.full(n_vis, np.nan)
 col_dec_radio= np.full(n_vis, np.nan)
 col_offset   = np.full(n_vis, np.nan)   # arcsec
+col_err_int  = np.full(n_vis, np.nan)   # mJy
 col_flag     = np.full(n_vis, "", dtype="U20")
 
 # Store peak pixel positions for cutout plotting
@@ -234,10 +232,11 @@ for k in range(n_vis):
         beam_pixels    = rd[beam_mask]
         beam_pixels    = beam_pixels[np.isfinite(beam_pixels)]
 
-        if len(beam_pixels) > 0:
-            col_int[k] = float(np.nansum(beam_pixels)) / beam_area_pix * 1000.0  # mJy
-        else:
-            col_int[k] = col_peak[k]  # fallback: point source assumption
+        if len(beam_pixels) == 0:
+            col_flag[k] = "empty_aperture"; continue
+        # Aperture sum in beams, then corrected for the flux the aperture misses.
+        col_int[k] = (float(np.sum(beam_pixels)) / beam_area_pix
+                      / ENCLOSED * 1000.0)  # mJy
 
         # Step F: Local RMS (annulus around peak)
         ann_mask = (dist_from_peak >= RMS_ANN_IN) & (dist_from_peak <= RMS_ANN_OUT)
@@ -249,9 +248,15 @@ for k in range(n_vis):
         else:
             col_rms[k] = float(np.nanmedian(nd[np.isfinite(nd)])) * 1000.0
 
-        # Step G: SNR
+        # Step G: SNR, and the uncertainty on the aperture flux.  The noise
+        # scales with the number of independent beams the aperture covers and
+        # is corrected alongside the flux; the flux-scale term dominates for
+        # the brighter sources.
         if col_rms[k] > 0:
             col_snr[k] = col_peak[k] / col_rms[k]
+            sigma_ap = col_rms[k] * np.sqrt(n_beams_aper) / ENCLOSED
+            col_err_int[k] = float(np.hypot(sigma_ap,
+                                            FLUX_SCALE_ERR * abs(col_int[k])))
 
         col_flag[k] = "extracted"
 
@@ -271,10 +276,19 @@ visual.add_column(Column(col_ra_radio,                name="mkt_ra"))
 visual.add_column(Column(col_dec_radio,               name="mkt_dec"))
 visual.add_column(Column(col_peak.astype("f4"),       name="mkt_peak_flux_mJy"))
 visual.add_column(Column(col_int.astype("f4"),        name="mkt_int_flux_mJy"))
+visual.add_column(Column(col_err_int.astype("f4"),    name="mkt_err_int_flux_mJy"))
 visual.add_column(Column(col_rms.astype("f4"),        name="mkt_local_rms_mJy"))
 visual.add_column(Column(col_snr.astype("f4"),        name="mkt_snr"))
 visual.add_column(Column(col_offset.astype("f4"),     name="offset_arcsec"))
+visual.add_column(Column(np.full(n_vis, BEAM_RAD, dtype="f4"), name="aperture_radius_arcsec"))
+visual.add_column(Column(np.full(n_vis, ENCLOSED, dtype="f4"), name="enclosed_flux_fraction"))
 visual.add_column(Column(col_flag,                    name="flux_flag"))
+for name, unit in (("mkt_peak_flux_mJy", "mJy/beam"), ("mkt_local_rms_mJy", "mJy/beam"),
+                   ("mkt_int_flux_mJy", "mJy"), ("mkt_err_int_flux_mJy", "mJy"),
+                   ("offset_arcsec", "arcsec"), ("aperture_radius_arcsec", "arcsec")):
+    visual[name].unit = unit
+visual["mkt_int_flux_mJy"].description = (
+    "aperture sum inside one beam half-width, divided by the enclosed fraction")
 
 visual.write(OUT_VOT, format="votable", overwrite=True)
 print(f"  -> {OUT_VOT}  ({n_vis} rows)")
@@ -385,5 +399,4 @@ if n_ok > 0:
     print(f"  Offset     — median: {np.nanmedian(col_offset[ok]):.2f}\"")
 print(f"\n  Catalogue: {OUT_VOT}")
 print(f"  Cutouts:   {OUT_PDF}")
-print("\n  Verify cutouts then run: python "
-      "02_Scripts/step3c_build_meerkat_catalogue_and_multisurvey_figures.py")
+print("\n  Verify the cutouts, then run step3c.")
