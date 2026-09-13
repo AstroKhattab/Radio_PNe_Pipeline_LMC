@@ -174,6 +174,21 @@ for name, key in (("thermal", "mir_median_thermal"), ("uncertain", None), ("stee
 add("4.5 MIR/radio", "With both a reliable index and a ratio",
     int(mir["reliable_index_and_ratio"]), "mir_reliable_index_and_ratio")
 
+ratio_all = np.asarray(tally["cohen_ratio_near1GHz"], dtype=float)
+has_ratio = np.isfinite(ratio_all)
+thermal_r = ratio_all[has_ratio & (sp == "thermal")]
+steep_r = ratio_all[has_ratio & (sp == "steep")]
+pn_high = cfg["mir_radio"]["pn_band"][1]
+add("4.5 MIR/radio", f"Thermal sources above R = {pn_high:g} (per cent)",
+    100 * np.mean(thermal_r > pn_high), None, "{:.0f}")
+add("4.5 MIR/radio", f"Steep sources at or below R = {pn_high:g} (per cent)",
+    100 * np.mean(steep_r <= pn_high), None, "{:.0f}")
+add("4.5 MIR/radio", f"Balanced accuracy of R = {pn_high:g} as a steep/thermal split (per cent)",
+    50 * (np.mean(thermal_r > pn_high) + np.mean(steep_r <= pn_high)), None, "{:.0f}")
+from scipy.stats import mannwhitneyu
+add("4.5 MIR/radio", "Mann-Whitney p, thermal R > steep R",
+    mannwhitneyu(thermal_r, steep_r, alternative="greater").pvalue, None, "{:.1e}")
+
 # ---------------------------------------------------------------- step 4c
 criteria = csv("step5d_criteria_outcomes.csv")
 crit = {str(r["criterion"]): (int(r["pass"]), int(r["fail"]), int(r["not_measurable"]))
@@ -248,6 +263,26 @@ add("4.10 PNLF", "AIC rank of the canonical form", int(full["rank"]), "pnlf_ciar
 add("4.10 PNLF", "delta AIC of the canonical form",
     float(full["delta_aic"]), "pnlf_ciardullo_delta_aic", "{:.2f}")
 
+def quadratic_bright_root(table):
+    """Brighter zero crossing of the fitted quadratic a M^2 + b M + c.
+
+    The polynomial has no cutoff parameter, so this is the nearest thing to
+    an M* it offers: the magnitude at which the fitted counts reach zero on
+    the bright side.
+    """
+    names = [str(m) for m in table["model"]]
+    a, b, c = [float(v) for v in str(table[names.index("Polynomial (2)")]["parameters"]).split(",")]
+    if a >= 0:
+        return "not defined (parabola opens upwards)"
+    roots = np.roots([a, b, c])
+    roots = roots[np.isreal(roots)].real
+    return float(roots.min()) if roots.size else "not defined (no real root)"
+
+
+_q = quadratic_bright_root(models)
+add("4.10 PNLF", "Quadratic bright-end zero crossing (mag)", _q, None,
+    "{:.3f}" if isinstance(_q, float) else "{}")
+
 masks = lookup(csv("step6e_mask_comparison.csv"), "treatment", "chi2_nu")
 add("4.10 PNLF", "chi2_nu with the over-ceiling objects left in",
     float(masks["no_ceiling_mask"]), "pnlf_redchi_ceiling_off", "{:.2f}")
@@ -263,6 +298,9 @@ add("4.11 High-confidence PNLF", "AIC rank of the canonical form",
     int(high["rank"]), "high_ciardullo_rank")
 add("4.11 High-confidence PNLF", "delta AIC of the canonical form",
     float(high["delta_aic"]), "high_ciardullo_delta_aic", "{:.2f}")
+_q = quadratic_bright_root(models_high)
+add("4.11 High-confidence PNLF", "Quadratic bright-end zero crossing (mag)", _q, None,
+    "{:.3f}" if isinstance(_q, float) else "{}")
 
 # ---------------------------------------------------------------- HASH SMC
 hash_all = Table.read(cfg.data("hash_catalogue"), format="votable")
@@ -375,6 +413,9 @@ lines += ["## Fixed parameters this run used", "",
           f"| Completeness limit | {cfg['pnlf']['completeness_limit_mag']} mag "
           f"= {cfg.completeness_flux_ujy():.1f} uJy (computed) |",
           f"| Aperture enclosed fraction | {cfg.enclosed_fraction():.3f} (computed) |",
+          f"| Flux-scale term in the spectral fit | MeerKAT sub-bands "
+          f"{cfg['meerkat']['calibration_fraction']:.0%}, ASKAP "
+          f"{cfg['askap']['calibration_fraction']:.0%}, in quadrature |",
           f"| Spectral index cuts | n >= {cfg['spectral_index']['min_points_reliable']}, "
           f"delta alpha < {cfg['spectral_index']['max_alpha_error']}, "
           f"chi2_nu < {cfg['spectral_index']['max_reduced_chisq']} |",

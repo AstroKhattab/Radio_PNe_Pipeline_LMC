@@ -86,6 +86,7 @@ DEFAULT_ERR_FRAC = CUTS["default_flux_error_fraction"]
 FIELD_BINS = CUTS["field_comparison_bins"]
 ASKAP_FREQ_GHZ = cfg["askap"]["frequency_mhz"] / 1000.0
 ASKAP_CAL_FRAC = cfg["askap"]["calibration_fraction"]
+MEERKAT_CAL_FRAC = cfg["meerkat"]["calibration_fraction"]
 MEERKAT_CENTRAL_FREQ_GHZ = cfg["meerkat"]["frequency_ghz"]
 
 # Astropy appends _1 to the integrated-flux FIELD names in this VOTable (the
@@ -161,6 +162,9 @@ def extract_meerkat_channels(row):
             continue
         if not (np.isfinite(error_jy) and error_jy > 0):
             error_jy = DEFAULT_ERR_FRAC * flux_jy
+        # The sub-band flux-scale term, in quadrature, as the ASKAP point
+        # already carries its published one.
+        error_jy = np.hypot(error_jy, MEERKAT_CAL_FRAC * flux_jy)
         frequencies.append(frequency_mhz / 1000.0)
         fluxes.append(flux_jy * 1000.0)
         errors.append(error_jy * 1000.0)
@@ -204,7 +208,8 @@ has_askap_point = np.zeros(n_sources, dtype=np.int16)
 mkt_ch4_flux_jy = np.full(n_sources, np.nan)
 mkt_ch4_error_jy = np.full(n_sources, np.nan)
 
-print("\n[2] Fitting all available MeerKAT + ASKAP detections...")
+print(f"\n[2] Fitting all available MeerKAT + ASKAP detections "
+      f"(sub-band flux-scale term {MEERKAT_CAL_FRAC:.0%}, ASKAP {ASKAP_CAL_FRAC:.0%})...")
 # One padded row per source, so the fit is the same call the field comparison
 # below makes.  Padding with NaN drops those slots from the fit.
 n_slots = len(CHANNEL_FREQUENCIES_MHZ) + 1
@@ -321,6 +326,8 @@ for column in [
 ]:
     detected.add_column(column)
 
+detected.meta["meerkat_calibration_fraction"] = MEERKAT_CAL_FRAC
+detected.meta["askap_calibration_fraction"] = ASKAP_CAL_FRAC
 detected.write(OUT_VOT, format="votable", overwrite=True)
 print(f"    {OUT_VOT}")
 
@@ -338,6 +345,7 @@ for slot, (frequency_mhz, flux_column, error_column) in enumerate(available_chan
     error = (np.ma.asarray(mkt5[error_column], dtype=float).filled(np.nan) * 1000.0
              if error_column else np.full(n_field, np.nan))
     error = np.where(np.isfinite(error) & (error > 0), error, DEFAULT_ERR_FRAC * flux)
+    error = np.hypot(error, MEERKAT_CAL_FRAC * flux)     # same treatment as the PNe
     field_freq[:, slot] = frequency_mhz / 1000.0
     field_flux[:, slot] = np.where(flux > 0, flux, np.nan)
     field_err[:, slot] = error

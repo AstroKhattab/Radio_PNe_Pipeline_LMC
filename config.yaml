@@ -65,6 +65,13 @@ meerkat:
   beam_fwhm_arcsec: 8.0
   median_rms_ujy: 11.0    # published median local noise of the mosaic
   pixel_arcsec: 1.5
+  # Per-sub-band flux-scale uncertainty, added in quadrature to the Aegean fit
+  # error of every sub-band point before the spectral fit.  Aegean reports the
+  # formal fit error, which shrinks with S/N and carries no calibration term;
+  # without this the brightest, best-measured sources fail the chi-square cut
+  # on error bars of a fraction of a per cent.  Set equal to the ASKAP term so
+  # the two surveys are treated alike.
+  calibration_fraction: 0.08
   # Sub-band centres used in the spectral-index fit, MHz.  Channels 8 and 9
   # (~1.1 GHz) are omitted for persistent RFI.
   channels:

@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.1.0 — 2026-09-13
+
+**A flux-scale term is now added to every MeerKAT sub-band point before the
+spectral fit.** Aegean reports the formal fit error, which shrinks with S/N
+and carries no calibration term. The result was that the sixteen brightest,
+best-measured sources in the sample — all with 12–13 sub-band points and
+Δα ≤ 0.06 — failed the χ²ν < 10 cut on error bars of 0.3–4.5 per cent of
+flux, against a sample median of 10 per cent. A source was being rejected for
+being well measured. An 8 per cent flux-scale uncertainty is now added in
+quadrature to each sub-band error, the same treatment the ASKAP point has
+carried from the start (`meerkat.calibration_fraction` in `config.yaml`), and
+applied identically to the field catalogue in the PN-versus-field comparison.
+
+Net effect at 8 per cent: the sixteen are rescued (7 thermal, 4 uncertain,
+5 steep); three previously reliable sources are lost, because the larger
+errors push Δα to 0.51–0.55, just over the cut; and four survivors change
+class (three uncertain → thermal, one uncertain → steep). Reliable indices
+128 → 141; thermal / uncertain / steep 32 / 30 / 66 → 40 / 30 / 71. The
+sixteen rescued and their classes are the same at 5, 8 and 10 per cent.
+
+With the term in place no fitted source fails the χ²ν < 10 cut — the largest
+χ²ν among the 141 reliable indices is 3.2 — so on this sample Δα < 0.5 is the
+only binding reliability cut. The χ² cut is retained as a guard against
+curved or confused spectra but currently removes nothing; Appendix A of the
+paper now says so.
+
+*Also affects:* criterion 4a; the four radio classes 76 / 103 / 67 / 8 →
+77 / 103 / 66 / 8; both contingency tables; the high-confidence PNLF sample
+(76 → 77, M* −4.278 → −4.285). Six of the seven over-ceiling objects are among
+the sixteen: three come out steep, two uncertain, and HD 269404 thermal. The
+full-sample PNLF is unchanged. The PN-versus-field comparison applies the same
+term to both populations, but the field indices rest on the MeerKAT sub-bands
+alone whereas the PN indices include the ASKAP point where available.
+
+
 ## 1.0.0 — 2026-09-07
 
 The release accompanying the submitted manuscript, following a full audit of

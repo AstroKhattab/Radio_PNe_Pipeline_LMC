@@ -83,7 +83,13 @@ whether a radio source at the position of an optical PN is in fact the PN.
 `log10 S = α log10 ν + c` is fitted by weighted least squares over the usable
 MeerKAT sub-bands together with the ASKAP point **where the source is detected
 by ASKAP**, with weights propagated from the flux uncertainties into log space
-as `σ_logS = σ_S / (S ln10)`. The MeerKAT broadband point is drawn on the SED
+as `σ_logS = σ_S / (S ln10)`. Before the fit, a flux-scale uncertainty is added
+in quadrature to every point: the published 8 per cent for ASKAP, and the same
+fraction for each MeerKAT sub-band. Aegean's error is the formal fit
+uncertainty, which shrinks with S/N and carries no calibration term; without
+the added term the brightest, best-measured sources fail the χ²ν cut on error
+bars of a fraction of a per cent. The value is set once in `config.yaml` and
+the classification does not depend on it between 5 and 10 per cent. The MeerKAT broadband point is drawn on the SED
 pages but not fitted: it comes from the same data as the sub-bands and would
 double-count the band.
 
