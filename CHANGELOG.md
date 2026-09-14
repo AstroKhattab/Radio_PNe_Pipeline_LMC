@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.1.2
+
+**The mid-infrared thresholds are no longer attributed to Cohen et al. (2011).**
+They publish medians with dispersions and no acceptance range: 4.7 +/- 1.1 for
+PNe, 25 +/- 5 for compact and diffuse H II regions, 42 for ultra-compact ones.
+The 0.5 to 10 band and the threshold at 20 are ours. `config.yaml` now says so
+and records Cohen's actual values beside them.
+
+`make_summary.py` measures what the Galactic calibration does and does not do
+on this sample: the band at the Galactic dispersion, 3.6 to 5.8, holds four
+thermal and four steep sources; the ratio nevertheless ranks the two
+populations with an area under the ROC of 0.81 and a best single cut at
+R = 5.1, and it carries a usable value for 64 detections that yield no
+spectral index.
+
+No threshold was changed and no result moved. Criterion 4b is scored exactly as
+before, deliberately: the best cut is optimised against the spectral index, so
+adopting it would destroy the independence of the two criteria.
+
+## 1.1.1
+
+**`make_summary.py` now checks how the two spectral populations fall across
+the three zones of Cohen et al. (2011)**, and runs the two tests the
+discussion rests on: whether the high-ratio and in-band thermal sources differ
+in HASH status, and whether they differ in 1.295 GHz flux. They do not. The
+manuscript's revised mid-infrared argument quotes those numbers, so they are
+compared against the pipeline like every other value rather than being
+asserted in the text alone.
+
+No result changed and no threshold moved. This release adds ten rows to
+`results/summary.md`.
+
 ## 1.1.0 — 2026-09-13
 
 **A flux-scale term is now added to every MeerKAT sub-band point before the

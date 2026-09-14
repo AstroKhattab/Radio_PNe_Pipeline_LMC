@@ -126,9 +126,16 @@ spectral_index:
 # --- Step 4b: mid-infrared to radio ratio -----------------------------------
 mir_radio:
   irac8_zero_point_jy: 64.13   # IRAC 8.0 um zero-magnitude flux density
-  pn_band: [0.5, 10.0]         # Cohen et al. 2011 PN-like band
-  hii_above: 20.0              # H II-like
-  cohen_pn_median: 4.7         # Galactic PN median, for reference on the figure
+  # These three thresholds are OURS, not Cohen's.  Cohen et al. (2011) publish
+  # medians with dispersions and no acceptance range: PNe 4.7 +/- 1.1, compact
+  # and diffuse H II 25 +/- 5, ultra-compact H II 42.  The band below brackets
+  # the Galactic PN median generously; a band at the Galactic dispersion
+  # (3.6 to 5.8) holds 4 thermal and 4 steep sources and separates nothing.
+  pn_band: [0.5, 10.0]         # adopted PN-like band
+  hii_above: 20.0              # adopted H II-like threshold
+  cohen_pn_median: 4.7         # Cohen et al. 2011 Galactic PN median
+  cohen_pn_sigma: 1.1          # its dispersion; 1 sigma band is 3.6 to 5.8
+  cohen_hii_median: 25.0       # Cohen et al. 2011 compact/diffuse H II median
   # Frequency preference for the adopted ratio: the flux actually measured,
   # never one scaled to a frequency at which there is no measurement.
   frequency_order: ["askap_888", "meerkat_1295"]

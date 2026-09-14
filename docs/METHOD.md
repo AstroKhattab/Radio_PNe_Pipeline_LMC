@@ -119,6 +119,18 @@ and the MIR and radio fluxes scale together. Cohen et al. (2011) turned this
 into a diagnostic, combining MGPS-2 at 843 MHz with NVSS at 1.4 GHz and treating
 the pair as one measurement near 1 GHz. They did **not** define it at 1.295 GHz.
 
+**The thresholds in `config.yaml` are ours, not Cohen's.** Cohen et al. publish
+medians with dispersions and no acceptance range: 4.7 +/- 1.1 for PNe, 25 +/- 5
+for compact and diffuse H II regions, 42 for ultra-compact ones. The band we
+screen on, 0.5 to 10, brackets the Galactic PN median deliberately wide. A band
+set at the Galactic dispersion instead, 3.6 to 5.8, holds four thermal and four
+steep sources, so it separates nothing; that is measured in `results/summary.md`
+rather than argued. The ratio does rank the two populations, with an area under
+the ROC of 0.81 and a best single cut near R = 5, but that cut is optimised
+against our own spectral index and is therefore reported, never applied: a 4b
+calibrated on 4a would not be independent of it, and the independence is what
+lets the score test the optical classification.
+
 The ratio is therefore computed at the frequencies actually measured, rather
 than scaling a flux to a frequency at which there is no data: the ASKAP 888 MHz
 flux where it exists, otherwise the MeerKAT broadband flux. 888 MHz is the

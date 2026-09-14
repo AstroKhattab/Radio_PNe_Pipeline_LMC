@@ -5,7 +5,7 @@
 #
 # Update this file when the manuscript is updated, not when a result changes.
 
-source: "main_text_v4.tex, revision round 1, 2026-09-13"
+source: "main_text_v4.tex, revision round 1"
 
 values:
   # Section 4.1, the parent sample
@@ -58,6 +58,26 @@ values:
   mir_median_thermal: 20.2
   mir_median_steep: 2.7
   mir_reliable_index_and_ratio: 88
+
+  # Section 4.5, how each population falls across the Cohen zones
+  mir_thermal_with_ratio: 35
+  mir_thermal_in_band: 12
+  mir_thermal_between: 5
+  mir_thermal_above_hii: 18
+  mir_steep_with_ratio: 28
+  mir_steep_in_band: 23
+  mir_steep_between: 0
+  mir_steep_above_hii: 3
+
+  # Section 5.3, what the Galactic calibration fails at and succeeds at
+  mir_thermal_in_cohen_band: 4
+  mir_steep_in_cohen_band: 4
+  mir_thermal_above_cohen_hii: 16
+  mir_auc: 0.81
+  mir_best_threshold: 5.1
+  mir_no_index_with_ratio: 64
+  mir_no_index_thermal_like: 38
+  mir_no_index_steep_like: 26
 
   # Section 4.6, the flux ceiling
   ceiling_below: 242

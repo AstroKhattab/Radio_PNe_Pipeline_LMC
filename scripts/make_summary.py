@@ -189,6 +189,81 @@ from scipy.stats import mannwhitneyu
 add("4.5 MIR/radio", "Mann-Whitney p, thermal R > steep R",
     mannwhitneyu(thermal_r, steep_r, alternative="greater").pvalue, None, "{:.1e}")
 
+# How the two populations fall across the three zones of Cohen et al. (2011).
+# Section 4.5 quotes these, and the discussion turns on the thermal class
+# being spread across the zones rather than displaced as a whole.
+pn_low = cfg["mir_radio"]["pn_band"][0]
+hii_low = cfg["mir_radio"]["hii_above"]
+for name, values in (("thermal", thermal_r), ("steep", steep_r)):
+    in_band = int(((values >= pn_low) & (values <= pn_high)).sum())
+    between = int(((values > pn_high) & (values <= hii_low)).sum())
+    above = int((values > hii_low).sum())
+    add("4.5 MIR/radio", f"{name.capitalize()} sources inside the Galactic PN band",
+        in_band, f"mir_{name}_in_band")
+    add("4.5 MIR/radio", f"{name.capitalize()} sources between R = {pn_high:g} and {hii_low:g}",
+        between, f"mir_{name}_between")
+    add("4.5 MIR/radio", f"{name.capitalize()} sources above R = {hii_low:g}",
+        above, f"mir_{name}_above_hii")
+    add("4.5 MIR/radio", f"{name.capitalize()} sources carrying a ratio",
+        int(len(values)), f"mir_{name}_with_ratio")
+
+# The discussion states that the high-ratio and in-band thermal sources are
+# not told apart by anything else we hold on them.  Both tests are here so
+# the claim is checked rather than asserted.
+therm_mask = has_ratio & (sp == "thermal")
+zone_hi = therm_mask & (ratio_all > hii_low)
+zone_in = therm_mask & (ratio_all >= pn_low) & (ratio_all <= pn_high)
+stat_col = np.asarray([str(x).strip() for x in tally["hash_pnstat"]])
+add("4.5 MIR/radio", "Thermal sources in either zone classified T by HASH (per cent)",
+    100 * np.mean(stat_col[zone_hi | zone_in] == "T"), None, "{:.0f}")
+flux_col = np.asarray(tally["mkt_int_flux_Jy"], dtype=float)
+f_hi = flux_col[zone_hi][np.isfinite(flux_col[zone_hi])]
+f_in = flux_col[zone_in][np.isfinite(flux_col[zone_in])]
+add("4.5 MIR/radio", "Mann-Whitney p, flux of high-ratio against in-band thermal",
+    mannwhitneyu(f_hi, f_in, alternative="two-sided").pvalue, None, "{:.2f}")
+
+# Section 5.3 states what the Galactic calibration fails at and what it
+# succeeds at.  Both halves are measured here so neither is an assertion.
+c_med = cfg["mir_radio"]["cohen_pn_median"]
+c_sig = cfg["mir_radio"]["cohen_pn_sigma"]
+c_lo, c_hi = c_med - c_sig, c_med + c_sig
+t_in = int(((thermal_r >= c_lo) & (thermal_r <= c_hi)).sum())
+s_in = int(((steep_r >= c_lo) & (steep_r <= c_hi)).sum())
+add("4.5 MIR/radio", f"Thermal sources inside the Galactic dispersion {c_lo:.1f}-{c_hi:.1f}",
+    t_in, "mir_thermal_in_cohen_band")
+add("4.5 MIR/radio", f"Steep sources inside the Galactic dispersion {c_lo:.1f}-{c_hi:.1f}",
+    s_in, "mir_steep_in_cohen_band")
+add("4.5 MIR/radio", "Thermal at or above the Galactic H II median",
+    int((thermal_r >= cfg["mir_radio"]["cohen_hii_median"]).sum()),
+    "mir_thermal_above_cohen_hii")
+add("4.5 MIR/radio", "Separation of the class medians (dex)",
+    float(np.log10(np.median(thermal_r) / np.median(steep_r))), None, "{:.2f}")
+
+# how well the ratio ranks the two populations, and the best single cut
+u_two = mannwhitneyu(thermal_r, steep_r, alternative="two-sided")
+add("4.5 MIR/radio", "Area under the ROC, thermal against steep",
+    float(u_two.statistic / (len(thermal_r) * len(steep_r))), "mir_auc", "{:.2f}")
+_cand = np.unique(np.concatenate([thermal_r, steep_r]))
+_bal = np.array([0.5 * (np.mean(thermal_r > c) + np.mean(steep_r <= c)) for c in _cand])
+_best = int(np.argmax(_bal))
+add("4.5 MIR/radio", "Best single threshold separating thermal from steep",
+    float(_cand[_best]), "mir_best_threshold", "{:.1f}")
+add("4.5 MIR/radio", "Thermal above that threshold (per cent)",
+    100 * np.mean(thermal_r > _cand[_best]), None, "{:.0f}")
+add("4.5 MIR/radio", "Steep at or below that threshold (per cent)",
+    100 * np.mean(steep_r <= _cand[_best]), None, "{:.0f}")
+add("4.5 MIR/radio", "Balanced accuracy at that threshold (per cent)",
+    100 * _bal[_best], None, "{:.0f}")
+
+# what the ratio adds where no spectral index can be fitted
+_no_index = has_ratio & (sp == "no_reliable_alpha")
+add("4.5 MIR/radio", "No reliable index but a usable ratio",
+    int(_no_index.sum()), "mir_no_index_with_ratio")
+add("4.5 MIR/radio", "Of those, thermal-like at the best threshold",
+    int((ratio_all[_no_index] > _cand[_best]).sum()), "mir_no_index_thermal_like")
+add("4.5 MIR/radio", "Of those, steep-like at the best threshold",
+    int((ratio_all[_no_index] <= _cand[_best]).sum()), "mir_no_index_steep_like")
+
 # ---------------------------------------------------------------- step 4c
 criteria = csv("step5d_criteria_outcomes.csv")
 crit = {str(r["criterion"]): (int(r["pass"]), int(r["fail"]), int(r["not_measurable"]))
