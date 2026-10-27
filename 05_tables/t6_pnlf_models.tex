@@ -1,0 +1,18 @@
+\begin{tabular}{rllrrrrl}
+\toprule
+Rank & Model & Form & $k$ & $C$ & AIC & $\Delta$AIC & Parameters \\
+\midrule
+1 & Polynomial (2) & $aM^2+bM+c$ & 3 & 14.37 & 20.37 & 0.00 & $a=-2.34$, $b=-6.45$, $c=17.3$ \\
+2 & Ciardullo (canonical) & $N_0\,e^{0.307(M-M^*)}\,[1-e^{3(M^*-M)}]$ & 2 & 16.70 & 20.70 & 0.33 & $N_0=8.92$, $M^*=-4.4$ \\
+3 & Polynomial (3) & $aM^3+bM^2+cM+d$ & 4 & 14.37 & 22.37 & 2.00 & $a=0.035$, $b=-2.05$, $c=-5.74$, $d=17.8$ \\
+4 & Ciardullo (free) & $N_0\,e^{\alpha(M-M^*)}\,[1-e^{\beta(M^*-M)}]$ & 4 & 14.40 & 22.40 & 2.03 & $N_0=19$, $M^*=-4.4$, $\alpha=0.0551$, $\beta=1$ \\
+5 & Gaussian & $A\,e^{-(M-\mu)^2/2\sigma^2}$ & 3 & 18.05 & 24.05 & 3.68 & $A=22.9$, $\mu=-1.57$, $\sigma=1.46$ \\
+6 & Cauchy & $A\,/\,[1+((M-\mu)/\gamma)^2]$ & 3 & 19.79 & 25.79 & 5.42 & $A=24.4$, $\mu=-1.57$, $\gamma=1.48$ \\
+7 & Student-$t$ & $\frac{A}{\sigma}\,t_\nu\!\left(\frac{M-\mu}{\sigma}\right)$ & 4 & 18.07 & 26.07 & 5.70 & $A=84$, $\mu=-1.57$, $\sigma=1.46$, $\nu=200$ \\
+8 & Skew-normal & $\frac{2A}{\omega}\,\phi(z)\,\Phi(az)$, $z=(M-\xi)/\omega$ & 4 & 18.15 & 26.15 & 5.78 & $A=72.1$, $\xi=-0.557$, $\omega=1.93$, $a=-2.87$ \\
+9 & Schechter & $\phi\,10^{0.4(\alpha+1)(M^*-M)}\,\exp[-10^{0.4(M^*-M)}]$ & 3 & 21.65 & 27.65 & 7.28 & $\phi=14.4$, $M^*=-4.35$, $\alpha=-1.18$ \\
+10 & Exponential & $a\,e^{bM}+c$ & 3 & 23.34 & 29.34 & 8.97 & $a=83.5$, $b=0.0974$, $c=-50$ \\
+\bottomrule
+\end{tabular}
+\\[2pt]
+{\footnotesize $M$ is $M_{\rm radio}$; $t_\nu$ is the Student-$t$ density, $\phi$ and $\Phi$ the normal density and distribution.}

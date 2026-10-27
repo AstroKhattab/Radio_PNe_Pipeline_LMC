@@ -1,0 +1,142 @@
+# Configuration for the LMC radio planetary-nebula pipeline.
+#
+# Every input file, threshold and physical constant used by the scripts is set
+# here.  To run the pipeline on other catalogues, change the file names and
+# column names below; no script needs to be edited.
+#
+# Relative paths are taken from the folder that holds this file (02_scripts).
+
+paths:
+  data: "../01_data"
+  figures: "../03_figures"         # PDF figures
+  output: "../04_catalogues"       # catalogue.fits
+  tables: "../05_tables"           # LaTeX tables
+  notes: "../07_notes"             # numbers.txt
+
+# --- Input files -------------------------------------------------------------
+inputs:
+  hash: "HASH_V163_full.vot"                     # HASH PN database, VizieR V/163
+  reid_positions: "Warren_PNE_673.vot"           # Reid & Parker (R14) running numbers
+  reid_photometry: "reid2014_photometry.vot"     # R14 photometry, incl. SAGE 8.0 um
+  meerkat_broadband: "MeerKAT_3sigma.vot"        # Aegean broadband catalogue
+  meerkat_subbands: "MeerKAT_Final_5sigma.vot"   # Aegean multi-channel catalogue
+  askap: "ASKAP_LMC_888MHz_catalogue_full.vot"   # Pennock et al. 2021, all tiers
+  meerkat_image: "LMC_I_mosaic_ch0_beam.fits"    # footprint only
+  askap_image: "ASKAP_LMC_888MHz_image.fits"     # footprint only
+  manual_fluxes: "manual_fluxes.csv"             # Step 2, measured by hand
+
+# --- Column names in the input files ----------------------------------------
+columns:
+  hash: {ra: "RAJ2000", dec: "DEJ2000", id: "HASH", name: "Name",
+         domain: "Domain", status: "PNstat", catalogue: "Catalogue",
+         diameter: "MajDiam"}
+  reid_positions: {ra: "RAx", dec: "DECx", id: "RPRef", cls: "OBJECT_PROBABILITY"}
+  reid_photometry: {ra: "_RA", dec: "_DE", mag8: "__8.0_", err8: "e__8.0_"}
+  meerkat_broadband: {ra: "ra", dec: "dec", peak: "peak_flux", int: "int_flux",
+                      err_int: "err_int_flux", rms: "local_rms"}   # Jy
+  meerkat_subbands: {ra: "dRAJ2000", dec: "dDECJ2000"}
+  askap: {ra: "RAJ2000", dec: "DEJ2000", peak: "PeakFlux", int: "IntFlux",
+          err_int: "e_IntFlux", rms: "LocalRMS"}                   # mJy
+
+# --- Step 0: parent sample ---------------------------------------------------
+parent:
+  domain: "LMC"
+  status: ["T", "P"]          # HASH true and probable PNe
+  ancillary_arcsec: 4.5       # radius for attaching R14 numbers and photometry
+
+# --- Surveys -----------------------------------------------------------------
+meerkat:
+  label: "MeerKAT L-band mosaic"
+  frequency_ghz: 1.295
+  band: "908--1656\\,MHz"
+  resolution: "$8\\farcs0$"
+  reference: "\\citet{2026arXiv260305966R}"
+  median_rms_ujy: 11.0
+  area_deg2: 105.4            # finite-data area, for the chance-match estimate
+  flux_scale: 0.08            # added in quadrature to every sub-band error
+  default_error_fraction: 0.10   # only where a sub-band error is missing
+  # Sub-band centres in MHz.  Channels 8 and 9 are omitted for RFI.
+  channels:
+    ch2: 908.037
+    ch3: 952.342
+    ch4: 996.646
+    ch5: 1043.46
+    ch6: 1092.78
+    ch7: 1144.61
+    ch10: 1317.23
+    ch11: 1381.18
+    ch12: 1448.05
+    ch13: 1519.94
+    ch14: 1593.92
+    ch15: 1656.2
+
+askap:
+  label: "ASKAP--EMU LMC"
+  frequency_ghz: 0.888
+  resolution: "$13\\farcs9\\times12\\farcs1$"
+  reference: "\\citet{2021MNRAS.506.3540P}"
+  area_deg2: 144.1
+  flux_scale: 0.08
+
+optical:
+  hash_reference: "\\citet{2016JPhCS.728c2008P}"
+  reid_reference: "\\citet{2006MNRAS.373..521R, 2014MNRAS.438.2642R}"
+  sage_reference: "\\citet{2006AJ....132.2268M, 2011AJ....142..102G}"
+
+# --- Step 1: cross-match -----------------------------------------------------
+crossmatch:
+  radius_arcsec: 4.5          # nearest radio source within this radius
+
+# --- Step 2: manual recovery (no script) -------------------------------------
+# Rows of 01_data/manual_fluxes.csv are sources with 3 <= S/N < 5 measured by hand
+# on the MeerKAT image.  Step 1 adds them to the MeerKAT detections.
+manual:
+  key: "RP_ID"                # column used to join the file to the catalogue
+  aperture_arcsec: 4.0
+  noise_annulus_arcsec: [30.0, 90.0]
+
+# --- Step 3: flux gate -------------------------------------------------------
+flux_gate:
+  ceiling_mjy: 2.2            # NGC 7027 at the LMC distance (Filipovic et al. 2009)
+
+# --- Step 4: spectral index --------------------------------------------------
+spectral_index:
+  thermal: [-0.2, 2.0]        # -0.2 <= alpha <= +2.0
+  steep_below: -0.5           # alpha < -0.5; uncertain in between
+  tiers:                      # any other fit is "low"
+    high: {min_points: 4, max_error: 0.20}
+    medium: {min_points: 4, max_error: 0.50}
+  points:
+    thermal: {high: 3, medium: 2, low: 1}
+    uncertain: 1
+    steep: 0
+    none: 0
+  # MeerKAT 1.295 GHz flux bins (mJy) for the comparison with the radio field
+  field_bins: [0.0, 0.3, 0.6, 1.0, .inf]
+
+# --- Step 5: Cohen ratio -----------------------------------------------------
+cohen_ratio:
+  irac8_zero_point_jy: 64.13  # IRAC 8.0 um zero-magnitude flux density
+  threshold: 4.7              # Cohen et al. 2011 Galactic PN median
+  points: 1                   # R >= threshold; otherwise 0
+
+# --- Step 6: score -----------------------------------------------------------
+levels:
+  high_min: 3                 # High >= 3, Possible = 2, Weak 0-1
+  possible_min: 2
+excerpt_rows: 10
+
+# --- Step 7: luminosity function ---------------------------------------------
+distance_kpc: 49.59           # Pietrzynski et al. 2019
+pnlf:
+  bin_mag: 0.3
+  reference_luminosity: 1.0e+20   # erg/s/Hz, zero point of M_radio
+  faint_limit_mag: -0.5           # 5 sigma completeness; fainter bins not fitted
+  # The bright limit is the flux gate converted to a magnitude.
+  ciardullo_alpha: 0.307
+  ciardullo_beta: 3.0
+  seed: 42
+  de_popsize: 40
+  de_tolerance: 1.0e-13
+  overlay_models: 4           # best empirical models drawn with Ciardullo
+  grid_models: 4              # panels in the ranked fit figure

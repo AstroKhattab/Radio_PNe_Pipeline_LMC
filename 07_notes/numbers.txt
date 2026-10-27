@@ -1,0 +1,135 @@
+[step0]
+HASH entries in file                                 11760
+HASH LMC entries                                     845
+Parent sample (T+P)                                  707
+  HASH T                                             545
+  HASH P                                             162
+Set aside (other PNstat)                             138
+With R14 running number                              605
+HASH-only identifier                                 102
+With R14 photometry row                              539
+With 8.0 um magnitude                                265
+MeerKAT broadband catalogue rows                     386520
+MeerKAT sub-band catalogue rows                      339128
+ASKAP catalogue rows                                 54612
+R14 position list rows                               673
+
+[step1]
+Match radius (arcsec)                                4.5
+Inside MeerKAT footprint                             685
+Inside ASKAP footprint                               702
+MeerKAT catalogue matches                            225
+  of which S/N >= 5                                  225
+  of which S/N < 5                                   0
+MeerKAT manual (Step 2)                              12
+MeerKAT detections total                             237 (186 T, 51 P)
+ASKAP detections                                     82 (60 T, 22 P)
+Both surveys                                         77 (55 T, 22 P)
+MeerKAT only                                         160 (131 T, 29 P)
+ASKAP only                                           5 (5 T, 0 P)
+Radio union                                          242 (191 T, 51 P)
+No detection                                         465 (354 T, 111 P)
+  no detection, inside MeerKAT footprint             447
+  no detection, outside MeerKAT footprint            18
+MeerKAT median offset, catalogue (arcsec)            0.76
+ASKAP median offset (arcsec)                         1.38
+MeerKAT mean dRA, dDec (arcsec)                      -0.14, -0.33
+MeerKAT std dRA, dDec (arcsec)                       0.95, 0.81
+ASKAP mean dRA, dDec (arcsec)                        -0.82, -0.46
+ASKAP std dRA, dDec (arcsec)                         1.00, 0.96
+Expected chance matches MeerKAT                      12.7
+Expected chance matches ASKAP                        1.3
+
+[step3]
+Ceiling (mJy)                                        2.2
+Ceiling as M_radio                                   -4.53
+Passed                                               230
+Rejected                                             7 (1 T, 6 P)
+Not measured at 1.295 GHz (ASKAP only)               5
+Rejected sources (ID, mJy)                           HASH5148 9.38, HASH5107 8.15, HASH32898 5.32, HASH7702 4.87, RP4398 3.24, HASH7581 2.47, HASH5105 2.35
+
+[step4]
+Gate survivors                                       235
+  with a fit (>= 2 points)                           179
+  no fit                                             56
+  thermal                                            50  (high 32, medium 6, low 12)
+  uncertain                                          31  (high 18, medium 10, low 3)
+  steep                                              96  (high 21, medium 47, low 28)
+  inverted                                           2  (high 0, medium 0, low 2)
+  tier high                                          71
+  tier medium                                        63
+  tier low                                           45
+  Step 4 points = 0                                  154
+  Step 4 points = 1                                  43
+  Step 4 points = 2                                  6
+  Step 4 points = 3                                  32
+Median alpha, survivors with fit                     -0.64
+Median alpha, thermal                                +0.30
+Median alpha, steep                                  -1.10
+Fits with ASKAP point                                70
+All detections with a fit (incl. rejected)           185
+alpha outside -1.5..2 (ID alpha+-err n gate)         RP1237 -7.97+-3.99 n=2 passed; RP2286 -6.79+-7.86 n=2 passed; RP1242 -3.36+-2.15 n=2 passed; RP1219 -2.97+-0.76 n=5 passed; RP399 -2.32+-0.67 n=6 passed; HASH7239 -2.11+-0.51 n=6 passed; RP2298 -2.09+-1.98 n=2 passed; HASH5146 -2.06+-0.38 n=10 passed; RP152 -2.04+-0.87 n=4 passed; HASH7313 -2.02+-0.33 n=11 passed; RP73 -1.87+-0.62 n=5 passed; RP663 -1.86+-0.65 n=5 passed; RP1502 -1.81+-0.95 n=2 passed; HASH5140 -1.69+-0.31 n=10 passed; HASH5112 -1.66+-0.41 n=9 passed; HASH5123 -1.62+-0.28 n=11 passed; RP2324 -1.57+-0.87 n=5 passed; HASH7675 -1.57+-0.96 n=3 passed; RP1532 -1.54+-1.91 n=2 passed; RP1697 +2.53+-1.65 n=2 passed; RP414 +5.65+-8.49 n=2 passed
+
+[step4_field]
+Field sources with a fit                             200163
+  0.0-0.3 mJy: PNe N, median; field N, median; offset 109 -0.85; 171617 -1.34; +0.49
+  0.3-0.6 mJy: PNe N, median; field N, median; offset 33 -0.42; 13875 -1.14; +0.73
+  0.6-1.0 mJy: PNe N, median; field N, median; offset 25 +0.05; 4924 -1.02; +1.07
+  1.0-inf mJy: PNe N, median; field N, median; offset 12 -0.02; 9747 -0.92; +0.90
+
+[step5]
+Threshold                                            4.7
+Gate survivors with a ratio                          144
+Gate survivors without (no 8 um or no MeerKAT)       91
+  with R >= threshold                                80
+Median R, all with ratio                             5.5
+  thermal: N, median R, N with R >= threshold        41, 17.4, 32
+  uncertain: N, median R, N with R >= threshold      26, 4.0, 13
+  steep: N, median R, N with R >= threshold          48, 2.8, 17
+  none: N, median R, N with R >= threshold           29, 7.4, 18
+
+[step6]
+High                                                 35 (34 T, 1 P)
+Possible                                             21 (18 T, 3 P)
+Weak                                                 179 (138 T, 41 P)
+Rejected                                             7 (1 T, 6 P)
+  score = 0                                          119
+  score = 1                                          60
+  score = 2                                          21
+  score = 3                                          11
+  score = 4                                          24
+  High: thermal/uncertain/steep/no class             35/0/0/0
+  Possible: thermal/uncertain/steep/no class         8/13/0/0
+  Weak: thermal/uncertain/steep/no class             7/18/96/58
+  High: R14 Known/True/Likely/Possible/not in R14    33/1/0/0/1
+  Possible: R14 Known/True/Likely/Possible/not in R14 19/1/0/1/0
+  Weak: R14 Known/True/Likely/Possible/not in R14    116/21/1/2/39
+  Rejected: R14 Known/True/Likely/Possible/not in R14 0/0/0/1/6
+
+[step7]
+Distance (kpc)                                       49.59
+MeerKAT sources with M_radio                         237
+  of which above the flux gate                       7
+M_radio range                                        -6.10 to 0.56
+Bright mask M_ceil (2.2 mJy)                         -4.53
+Faint mask M_lim / flux (uJy) / sigma                -0.5 / 53.9 / 4.9
+Bins total / fitted                                  23 / 13
+Fitted bins with zero counts                         0
+Sources in fitted bins                               203
+Sources brighter than fit range                      7
+Sources fainter than fit range                       27
+Fit statistic                                        Cash (Poisson deviance); AIC = C + 2k
+1. Polynomial (2)                                    C=14.37 dof=10 AIC=20.37 dAIC=0.00 | a=-2.34+-0.81, b=-6.45+-4.7, c=17.33+-6
+2. Ciardullo (canonical)                             C=16.70 dof=11 AIC=20.70 dAIC=0.33 | N0=8.923+-0.63, M*=-4.4+-0.011[bound]
+3. Polynomial (3)                                    C=14.37 dof=9 AIC=22.37 dAIC=2.00 | a=0.03505+-0.82, b=-2.05+-6.8, c=-5.736+-17, d=17.82+-13
+4. Ciardullo (free)                                  C=14.40 dof=9 AIC=22.40 dAIC=2.03 | N0=19.05+-4.1, M*=-4.401+-0.07[bound], alpha=0.05508+-0.083, beta=1+-0.052[bound]
+5. Gaussian                                          C=18.05 dof=10 AIC=24.05 dAIC=3.68 | A=22.95+-2, mu=-1.567+-0.28, sigma=1.463+-0.23
+6. Cauchy                                            C=19.79 dof=10 AIC=25.79 dAIC=5.42 | A=24.4+-2.5, mu=-1.572+-0.19, gamma=1.482+-0.27
+7. Student-$t$                                       C=18.07 dof=9 AIC=26.07 dAIC=5.70 | A=84+-3.2[bound], mu=-1.571+-0.15, sigma=1.458+-0.12, nu=200+-25[bound]
+8. Skew-normal                                       C=18.15 dof=9 AIC=26.15 dAIC=5.78 | A=72.13+-12, loc=-0.5573+-0.27, scale=1.93+-0.26, a=-2.874+-3
+9. Schechter                                         C=21.65 dof=10 AIC=27.65 dAIC=7.28 | phi=14.41+-2.4, M*=-4.35+-0.018[bound], alpha=-1.177+-0.075
+10. Exponential                                      C=23.34 dof=10 AIC=29.34 dAIC=8.97 | a=83.55+-3.8, b=0.09741+-0.015, c=-50+-0.77[bound]
+Ciardullo variant: $\alpha$, $\beta$ fixed           C=16.70 AIC=20.70 M*=-4.400 [M* at bound]
+Ciardullo variant: $\alpha$ free, $\beta$ fixed      C=15.68 AIC=21.68 M*=-4.400, alpha=0.24 [M* at bound]
+Ciardullo variant: $\alpha$, $\beta$ free            C=14.40 AIC=22.40 M*=-4.401, alpha=0.06, beta=1.00 [M* at bound]
+

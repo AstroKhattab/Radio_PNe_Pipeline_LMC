@@ -5,7 +5,7 @@ abstract: >-
   Analysis pipeline for a radio-continuum catalogue of planetary nebulae in the
   Large Magellanic Cloud, built from MeerKAT 1.295 GHz and ASKAP-EMU 888 MHz
   observations, and for the first radio planetary nebula luminosity function
-  measured for an external galaxy.
+  of the LMC.
 type: software
 authors:
   - family-names: Khattab
@@ -22,8 +22,6 @@ authors:
     affiliation: "Western Sydney University"
 repository-code: "https://github.com/AstroKhattab/Radio_PNe_Pipeline_LMC"
 license: MIT
-version: "1.0.0"
-date-released: "2026-09-07"
 keywords:
   - planetary nebulae
   - Large Magellanic Cloud
@@ -33,7 +31,7 @@ keywords:
   - luminosity function
 preferred-citation:
   type: article
-  title: "A Radio-Continuum Catalogue of Planetary Nebulae in the Large Magellanic Cloud and the First Radio Planetary Nebula Luminosity Function"
+  title: "The First Radio Planetary Nebula Luminosity Function of the Large Magellanic Cloud, and a Radio-Continuum Catalogue of its Planetary Nebulae"
   authors:
     - family-names: Khattab
       given-names: Omar K.

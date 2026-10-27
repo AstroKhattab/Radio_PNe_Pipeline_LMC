@@ -1,51 +1,15 @@
-# Input data and derived tables are not distributed with the code.  The
-# figures, the LaTeX tables and the summary are, because they are the result.
-data/
-01_Data/
-outputs/
-03_Outputs/
-04_Inspect/
-05_Figures/
-00_Context/
-
-# Large binary science products
-*.fits
-*.fits.gz
-*.fz
-*.hdf5
-*.pkl
-
-# Intermediate tables the pipeline writes
-*.vot
-*.xml.gz
-data_checksums.sha256
-
-# ...but keep the machine-written LaTeX tables, the figures and the summary.
-!figures/
-!figures/**
-!tables/
-!tables/**
-!results/
-!results/**
-!manual/
-!manual/**
+# Input catalogues and images are not distributed (see README).
+01_data/*
+!01_data/manual_fluxes.csv
 
 # Python
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
 venv/
-.ipynb_checkpoints/
 
 # Editors and OS
 .DS_Store
 .vscode/
 .idea/
 *.swp
-
-# LaTeX build products
-*.aux
-*.log
-*.out
-*.synctex.gz
