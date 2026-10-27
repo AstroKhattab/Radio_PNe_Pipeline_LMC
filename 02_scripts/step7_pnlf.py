@@ -11,7 +11,7 @@ Fitting: differential evolution (global search, fixed seed), then a bounded
 local minimisation.  Parameter errors come from the inverse Hessian of C/2.
 
 Outputs: catalogue columns M_radio, pnlf_fitted; figures f5_pnlf_data.pdf,
-         f6_pnlf_fits.pdf, f7_pnlf_overlay.pdf, fa2_ciardullo.pdf;
+         f6_pnlf_fits.pdf, f7_pnlf_overlay.pdf, f8_pnlf_canonical.pdf;
          table t6_pnlf_models.tex; numbers block [step7].
 """
 
@@ -279,9 +279,10 @@ fig.tight_layout()
 fig.savefig(c.figure("f5_pnlf_data.pdf"))
 plt.close(fig)
 
-# f6_pnlf_fits.pdf: the best models, ranked.
+# f6_pnlf_fits.pdf: the best models, ranked, sized to fill one page.
 k = pl["grid_models"]
-fig, axes = plt.subplots(int(np.ceil(k / 2)), 2, figsize=(9, 3.4 * np.ceil(k / 2)), sharex=True, sharey=True)
+rows = int(np.ceil(k / 2))
+fig, axes = plt.subplots(rows, 2, figsize=(7.2, 1.75 * rows), sharex=True, sharey=True)
 for i, ax in enumerate(np.atleast_1d(axes).flat):
     if i >= k:
         ax.axis("off")
@@ -289,16 +290,17 @@ for i, ax in enumerate(np.atleast_1d(axes).flat):
     r = results[i]
     draw_data(ax, ms=4)
     curve(ax, r, color="#C0392B" if i == 0 else "#1F6FB4", lw=1.8)
-    ax.set_title(f"{i + 1}. {r['name']}", fontsize=10)
-    ax.text(0.03, 0.95, f"$\\Delta$AIC = {r['aic'] - best_aic:.2f}\n$C$ = {r['C']:.1f}, $k$ = {r['k']}",
-            transform=ax.transAxes, va="top", fontsize=8)
+    ax.set_title(f"{i + 1}. {r['name']}", fontsize=8.5, pad=3)
+    ax.text(0.03, 0.94, f"$\\Delta$AIC = {r['aic'] - best_aic:.2f}\n$C$ = {r['C']:.1f}, $k$ = {r['k']}",
+            transform=ax.transAxes, va="top", fontsize=6.5)
     ax.text(0.55, 0.04, f"{FORMS[r['name']]}\n{tex_pars(r)}", transform=ax.transAxes,
-            ha="center", va="bottom", fontsize=7, linespacing=1.6)
+            ha="center", va="bottom", fontsize=5.5, linespacing=1.5)
+    ax.tick_params(labelsize=7)
     if i % 2 == 0:
-        ax.set_ylabel(r"$N$ per bin")
+        ax.set_ylabel(r"$N$ per bin", fontsize=8)
     if i >= k - 2:
-        ax.set_xlabel(r"$M_{\rm radio}$ (mag)")
-fig.tight_layout()
+        ax.set_xlabel(r"$M_{\rm radio}$ (mag)", fontsize=8)
+fig.tight_layout(h_pad=0.6, w_pad=0.6)
 fig.savefig(c.figure("f6_pnlf_fits.pdf"))
 plt.close(fig)
 
@@ -316,29 +318,33 @@ ax.text(0.97, 0.03, f"$N$ = {has.sum()}", transform=ax.transAxes, ha="right", fo
 fig.savefig(c.figure("f7_pnlf_overlay.pdf"))
 plt.close(fig)
 
-# fa2_ciardullo.pdf: the Ciardullo form with increasing freedom.
-lo_x = x.min()
-variants = [
-    (r"$\alpha$, $\beta$ fixed", ciar_canonical, [0, lo_x - 5], [1e6, lo_x - 0.05], "k"),
-    (r"$\alpha$ free, $\beta$ fixed", ciar_alpha, [0, lo_x - 5, 0.05], [1e6, lo_x - 0.05, 8], "#2166AC"),
-    (r"$\alpha$, $\beta$ free", ciardullo, [0, lo_x - 5, 0.05, 1.0], [1e6, lo_x - 0.05, 8, 30], "#D6604D"),
-]
+# f8_pnlf_canonical.pdf: the canonical Ciardullo form alone, the main-text figure.
 fig, ax = plt.subplots(figsize=(8.5, 6))
 draw_data(ax, ms=7)
-box = []
-for label, func, lb, ub, col in variants:
+rank = results.index(canon) + 1
+curve(ax, canon, color="k", lw=2.2,
+      label=f"Ciardullo canonical, rank {rank} ($\\Delta$AIC {canon['aic'] - best_aic:.2f})")
+ax.axvline(canon["p"][1], color="k", ls=":", lw=1.2)
+ax.text(canon["p"][1] + 0.05, 0.05, f"$M^*$ = {canon['p'][1]:.2f}", transform=ax.get_xaxis_transform(), fontsize=9)
+ax.set(xlabel=r"$M_{\rm radio}$ (mag)", ylabel=r"$N$ per 0.3 mag bin")
+ax.legend(fontsize=8.5, loc="upper left")
+ax.text(0.97, 0.03, f"$N$ = {has.sum()}", transform=ax.transAxes, ha="right", fontsize=9)
+fig.savefig(c.figure("f8_pnlf_canonical.pdf"))
+plt.close(fig)
+
+# The Ciardullo form with increasing freedom: fits for the numbers file only.
+lo_x = x.min()
+variants = [
+    (r"$\alpha$, $\beta$ fixed", ciar_canonical, [0, lo_x - 5], [1e6, lo_x - 0.05]),
+    (r"$\alpha$ free, $\beta$ fixed", ciar_alpha, [0, lo_x - 5, 0.05], [1e6, lo_x - 0.05, 8]),
+    (r"$\alpha$, $\beta$ free", ciardullo, [0, lo_x - 5, 0.05, 1.0], [1e6, lo_x - 0.05, 8, 30]),
+]
+for label, func, lb, ub in variants:
     r = fit_model(func, lb, ub, x, n_obs)
-    g = np.linspace(r["p"][1] + 0.01, M_LIM, 500)
-    ax.plot(g, func(g, *r["p"]), color=col, lw=2.2, label=f"{label}  $C$={r['C']:.1f}, AIC={r['aic']:.1f}")
     extra = "".join(f", {nm}={v:.2f}" for nm, v in zip(["alpha", "beta"], r["p"][2:]))
-    box.append(f"{label}: M*={r['p'][1]:.2f}{extra}")
     lines.append((f"Ciardullo variant: {label}",
                   f"C={r['C']:.2f} AIC={r['aic']:.2f} M*={r['p'][1]:.3f}{extra}"
                   + (" [M* at bound]" if r["bound"][1] else "")))
-ax.set(xlabel=r"$M_{\rm radio}$ (mag)", ylabel=r"$N$ per 0.3 mag bin")
-ax.legend(fontsize=8.5, loc="upper left")
-fig.savefig(c.figure("fa2_ciardullo.pdf"))
-plt.close(fig)
 
 c.write_numbers("step7", lines)
 print(f"step7: best model {results[0]['name']}, {in_fit.sum()} bins fitted")

@@ -2,7 +2,7 @@
 
 Fits S ~ nu^alpha to the twelve MeerKAT sub-bands plus the ASKAP 888 MHz point,
 classifies the index (thermal / uncertain / steep), sets how well it is
-constrained (tier high / medium / low) and gives the Step 4 points of the
+constrained (tier High_fit / Medium_fit / Low_fit) and gives the Step 4 points of the
 score.  It then fits the MeerKAT 5 sigma catalogue the same way and compares
 the median index of the PNe with that of the radio field in flux density bins.
 All thresholds are in config.yaml.
@@ -24,16 +24,16 @@ fit = c.spectral_indices(cat)
 alpha, err, npts = fit["alpha"], fit["alpha_err"], fit["n_points"]
 cls = c.spectral_class(alpha)
 
-tier = np.full(len(cat), "none", dtype="U6")
-tier[np.isfinite(alpha)] = "low"
+tier = np.full(len(cat), "none", dtype="U10")
+tier[np.isfinite(alpha)] = c.TIER_NAMES["low"]
 for name in ("medium", "high"):
     rule = si["tiers"][name]
-    tier[np.isfinite(alpha) & (npts >= rule["min_points"]) & (err < rule["max_error"])] = name
+    tier[np.isfinite(alpha) & (npts >= rule["min_points"]) & (err < rule["max_error"])] = c.TIER_NAMES[name]
 
 pts = si["points"]
 points = np.zeros(len(cat), dtype=int)
 for t in ("high", "medium", "low"):
-    points[(cls == "thermal") & (tier == t)] = pts["thermal"][t]
+    points[(cls == "thermal") & (tier == c.TIER_NAMES[t])] = pts["thermal"][t]
 points[cls == "uncertain"] = pts["uncertain"]
 points[cls == "steep"] = pts["steep"]
 
@@ -51,10 +51,10 @@ lines = [("Gate survivors", int(live.sum())),
          ("  no fit", int((live & ~np.isfinite(alpha)).sum()))]
 for k in ("thermal", "uncertain", "steep", "inverted"):
     sel = live & (cls == k)
-    lines.append((f"  {k}", f"{sel.sum()}  (high {(sel & (tier == 'high')).sum()}, "
-                            f"medium {(sel & (tier == 'medium')).sum()}, low {(sel & (tier == 'low')).sum()})"))
+    lines.append((f"  {k}", f"{sel.sum()}  (" + ", ".join(f"{c.TIER_NAMES[t]} {(sel & (tier == c.TIER_NAMES[t])).sum()}"
+                                                       for t in ("high", "medium", "low")) + ")"))
 for t in ("high", "medium", "low"):
-    lines.append((f"  tier {t}", int((live & (tier == t)).sum())))
+    lines.append((f"  tier {c.TIER_NAMES[t]}", int((live & (tier == c.TIER_NAMES[t])).sum())))
 for p in sorted(set(points[live])):
     lines.append((f"  Step 4 points = {p}", int((live & (points == p)).sum())))
 fin = live & np.isfinite(alpha)

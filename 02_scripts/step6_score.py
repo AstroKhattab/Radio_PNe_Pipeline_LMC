@@ -59,11 +59,11 @@ ceil = cfg["flux_gate"]["ceiling_mjy"]
 rows = [
     ["3. Flux cut", "Physical ceiling", f"$S_{{1.295}} > {ceil}$\\,mJy", "Rejected"],
     "midrule",
-    ["4. Spectral index", "Thermal, high tier", f"${lo} \\le \\alpha \\le +{hi}$, $n\\ge{th['high']['min_points']}$, "
-     f"$\\sigma_\\alpha<{th['high']['max_error']}$", f"+{p['thermal']['high']}"],
-    ["", "Thermal, medium tier", f"$n\\ge{th['medium']['min_points']}$, $\\sigma_\\alpha<{th['medium']['max_error']}$",
+    ["4. Spectral index", "Thermal, High\\_fit", "\\begin{tabular}[t]{@{}l@{}}" f"${lo} \\le \\alpha \\le +{hi}$,\\\\ $n\\ge{th['high']['min_points']}$, "
+     f"$\\sigma_\\alpha<{th['high']['max_error']}$" "\\end{tabular}", f"+{p['thermal']['high']}"],
+    ["", "Thermal, Medium\\_fit", f"$n\\ge{th['medium']['min_points']}$, $\\sigma_\\alpha<{th['medium']['max_error']}$",
      f"+{p['thermal']['medium']}"],
-    ["", "Thermal, low tier", "any other fit", f"+{p['thermal']['low']}"],
+    ["", "Thermal, Low\\_fit", "any other fit", f"+{p['thermal']['low']}"],
     ["", "Uncertain", f"${si['steep_below']} \\le \\alpha < {lo}$", f"+{p['uncertain']}"],
     ["", "Steep or no fit", f"$\\alpha < {si['steep_below']}$", f"{p['steep']}"],
     "midrule",
@@ -103,7 +103,7 @@ for i in pick:
     rows.append([c.tex_escape(r["RP_ID"]), r["hash_pnstat"], c.fmt(r["mkt_flux_mJy"], 3),
                  c.fmt(r["askap_flux_mJy"], 2),
                  f"${r['alpha']:+.2f}\\pm{r['alpha_err']:.2f}$" if np.isfinite(r["alpha"]) else "---",
-                 r["alpha_tier"] if r["alpha_tier"] != "none" else "---",
+                 c.tex_escape(r["alpha_tier"]) if r["alpha_tier"] != "none" else "---",
                  c.fmt(r["cohen_ratio"], 1), r["score"] if r["score"] >= 0 else "---", r["level"]])
 c.write_tex("t5_catalogue_excerpt.tex",
             ["ID", "HASH", "$S_{1.3}$ (mJy)", "$S_{0.9}$ (mJy)", "$\\alpha$", "Tier", "$R$", "Score", "Level"],

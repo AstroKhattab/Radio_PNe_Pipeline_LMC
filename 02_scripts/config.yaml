@@ -103,7 +103,7 @@ flux_gate:
 spectral_index:
   thermal: [-0.2, 2.0]        # -0.2 <= alpha <= +2.0
   steep_below: -0.5           # alpha < -0.5; uncertain in between
-  tiers:                      # any other fit is "low"
+  tiers:                      # any other fit is "low"; printed as High_fit / Medium_fit / Low_fit
     high: {min_points: 4, max_error: 0.20}
     medium: {min_points: 4, max_error: 0.50}
   points:
@@ -139,4 +139,4 @@ pnlf:
   de_popsize: 40
   de_tolerance: 1.0e-13
   overlay_models: 4           # best empirical models drawn with Ciardullo
-  grid_models: 4              # panels in the ranked fit figure
+  grid_models: 10             # panels in the ranked fit figure

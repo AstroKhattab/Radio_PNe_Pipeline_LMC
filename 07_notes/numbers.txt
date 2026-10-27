@@ -52,13 +52,13 @@ Rejected sources (ID, mJy)                           HASH5148 9.38, HASH5107 8.1
 Gate survivors                                       235
   with a fit (>= 2 points)                           179
   no fit                                             56
-  thermal                                            50  (high 32, medium 6, low 12)
-  uncertain                                          31  (high 18, medium 10, low 3)
-  steep                                              96  (high 21, medium 47, low 28)
-  inverted                                           2  (high 0, medium 0, low 2)
-  tier high                                          71
-  tier medium                                        63
-  tier low                                           45
+  thermal                                            50  (High_fit 32, Medium_fit 6, Low_fit 12)
+  uncertain                                          31  (High_fit 18, Medium_fit 10, Low_fit 3)
+  steep                                              96  (High_fit 21, Medium_fit 47, Low_fit 28)
+  inverted                                           2  (High_fit 0, Medium_fit 0, Low_fit 2)
+  tier High_fit                                      71
+  tier Medium_fit                                    63
+  tier Low_fit                                       45
   Step 4 points = 0                                  154
   Step 4 points = 1                                  43
   Step 4 points = 2                                  6

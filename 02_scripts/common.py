@@ -153,6 +153,10 @@ def write_tex(name, columns, rows, align=None, note=None):
             fh.write(f"\\\\[2pt]\n{{\\footnotesize {note}}}\n")
 
 
+# Names of the Step 4 fit tiers, kept distinct from the Step 6 levels (High, Possible, Weak).
+TIER_NAMES = {"high": "High_fit", "medium": "Medium_fit", "low": "Low_fit"}
+
+
 def tex_escape(value):
     return str(value).replace("_", "\\_").replace("&", "\\&").replace("%", "\\%")
 
