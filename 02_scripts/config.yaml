@@ -138,5 +138,4 @@ pnlf:
   seed: 42
   de_popsize: 40
   de_tolerance: 1.0e-13
-  overlay_models: 4           # best empirical models drawn with Ciardullo
   grid_models: 10             # panels in the ranked fit figure

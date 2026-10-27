@@ -11,7 +11,7 @@ Fitting: differential evolution (global search, fixed seed), then a bounded
 local minimisation.  Parameter errors come from the inverse Hessian of C/2.
 
 Outputs: catalogue columns M_radio, pnlf_fitted; figures f5_pnlf_data.pdf,
-         f6_pnlf_fits.pdf, f7_pnlf_overlay.pdf, f8_pnlf_canonical.pdf;
+         f6_pnlf_fits.pdf, f8_pnlf_canonical.pdf;
          table t6_pnlf_models.tex; numbers block [step7].
 """
 
@@ -304,19 +304,7 @@ fig.tight_layout(h_pad=0.6, w_pad=0.6)
 fig.savefig(c.figure("f6_pnlf_fits.pdf"))
 plt.close(fig)
 
-# f7_pnlf_overlay.pdf: overlay of the best empirical models and the canonical Ciardullo form.
-fig, ax = plt.subplots(figsize=(8.5, 6))
-draw_data(ax, ms=7)
-empirical = [r for r in results if not r["name"].startswith("Ciardullo")][:pl["overlay_models"]]
-for r, col, ls in zip(empirical, ["#D32F2F", "#1976D2", "#388E3C", "#F57C00"], ["-", "--", "-.", ":"]):
-    curve(ax, r, color=col, ls=ls, lw=2, label=f"{r['name']} ($\\Delta$AIC {r['aic'] - best_aic:.1f})")
 canon = next(r for r in results if r["name"] == "Ciardullo (canonical)")
-curve(ax, canon, color="k", ls="--", lw=2.2, label=f"Ciardullo canonical ($\\Delta$AIC {canon['aic'] - best_aic:.1f})")
-ax.set(xlabel=r"$M_{\rm radio}$ (mag)", ylabel=r"$N$ per 0.3 mag bin")
-ax.legend(fontsize=8.5, loc="upper left")
-ax.text(0.97, 0.03, f"$N$ = {has.sum()}", transform=ax.transAxes, ha="right", fontsize=9)
-fig.savefig(c.figure("f7_pnlf_overlay.pdf"))
-plt.close(fig)
 
 # f8_pnlf_canonical.pdf: the canonical Ciardullo form alone, the main-text figure.
 fig, ax = plt.subplots(figsize=(8.5, 6))
